@@ -42,6 +42,15 @@
         {% endblock %}
     </main>
 
+    <script>
+        function togglePassword(id) {
+            const field = document.getElementById(id);
+            if (field) {
+                field.type = field.type === 'password' ? 'text' : 'password';
+            }
+        }
+    </script>
+
     <footer class="container" style="text-align: center; margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #2d3748;">
         <small>&copy; 2026 HobbyPall - Extinde-ți rețeaua socială.</small>
     </footer>

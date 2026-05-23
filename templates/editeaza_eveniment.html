@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<article style="max-width: 700px; margin: 2rem auto;">
+    <header>
+        <h2 style="text-align: center; margin-bottom: 0;">Editează Evenimentul 📝</h2>
+        <p style="text-align: center; color: gray;">Actualizează detaliile evenimentului tău</p>
+    </header>
+
+    <form action="{{ url_for('editeaza_eveniment', id_eveniment=eveniment.id_eveniment) }}" method="POST" enctype="multipart/form-data">
+        <label for="titlu">
+            Titlul Evenimentului
+            <input type="text" id="titlu" name="titlu" placeholder="ex: Meci amator de baschet 3v3" required value="{{ eveniment.titlu }}">
+        </label>
+
+        <label for="descriere">
+            Descriere
+            <textarea id="descriere" name="descriere" rows="4" placeholder="Detalii despre activitate, ce trebuie să aducă participanții etc." required>{{ eveniment.descriere }}</textarea>
+        </label>
+
+        <div class="grid">
+            <label for="tip">
+                Tipul Evenimentului
+                <select id="tip" name="tip" required>
+                    <option value="Fizic" {% if eveniment.tip == 'Fizic' %}selected{% endif %}>Fizic (În persoană)</option>
+                    <option value="Online" {% if eveniment.tip == 'Online' %}selected{% endif %}>Online (Zoom/Discord)</option>
+                </select>
+            </label>
+
+            <label for="locatie">
+                Locație / Link
+                <input type="text" id="locatie" name="locatie" placeholder="ex: Parcul Herăstrău SAU link Google Meet" required value="{{ eveniment.locatie }}">
+            </label>
+        </div>
+
+        <div class="grid">
+            <label for="data_ora">
+                Data și Ora începerii
+                <input type="datetime-local" id="data_ora" name="data_ora" required value="{{ eveniment.data_ora }}">
+            </label>
+
+            <label for="durata_minute">
+                Durata (în minute)
+                <input type="number" id="durata_minute" name="durata_minute" min="15" placeholder="90" required value="{{ eveniment.durata_minute }}">
+            </label>
+        </div>
+
+        <label for="data_limita_inscriere">
+            Data limită pentru înscrieri
+            <input type="datetime-local" id="data_limita_inscriere" name="data_limita_inscriere" required value="{{ eveniment.data_limita_inscriere }}">
+        </label>
+
+        <label for="imagine">
+            Imagine Eveniment (Opțional)
+            <input type="file" id="imagine" name="imagine" accept="image/*">
+            <small style="color: #a0aec0;">Lasă gol pentru a păstra imaginea curentă. Încarcă una nouă pentru a o schimba.</small>
+        </label>
+
+        <label for="nr_maxim_participanti">
+            Număr maxim de participanți (Opțional)
+            <input type="number" id="nr_maxim_participanti" name="nr_maxim_participanti" min="1" placeholder="Lasă gol pentru locuri nelimitate" value="{{ eveniment.nr_maxim_participanti or '' }}">
+        </label>
+
+        <div class="grid">
+            <label for="varsta_min">
+                Vârstă Minimă (Opțional)
+                <input type="number" id="varsta_min" name="varsta_min" min="0" placeholder="Fără limită" value="{{ eveniment.varsta_min or '' }}">
+            </label>
+
+            <label for="varsta_max">
+                Vârstă Maximă (Opțional)
+                <input type="number" id="varsta_max" name="varsta_max" min="0" placeholder="Fără limită" value="{{ eveniment.varsta_max or '' }}">
+            </label>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button type="submit" class="secondary">Salvează Modificările</button>
+            <a href="{{ url_for('detalii_eveniment', id_eveniment=eveniment.id_eveniment) }}" role="button" class="outline">Anulează</a>
+        </div>
+    </form>
+</article>
+{% endblock %}

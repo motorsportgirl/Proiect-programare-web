@@ -3,12 +3,12 @@ import webbrowser
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
 import smtplib
 import random
 import string
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 
 load_dotenv()
 
@@ -42,7 +42,6 @@ def index():
     try:
         # 1. Preluăm evenimentele în funcție de filtru
         if user_id and filtru == 'create':
-            # .order('id_eveniment', descending=True) asigură afișarea de la cel mai recent la cel mai vechi
             response = supabase.table('evenimente').select("*").eq('id_organizator', user_id).order('id_eveniment', desc=True).execute()
             evenimente = response.data
             titru_sectiune = "👑 Evenimentele Organizate de Mine"
@@ -102,12 +101,13 @@ def register():
         sex = request.form.get('sex')
 
         try:
+            parola_hash = generate_password_hash(parola)
             date_utilizator = {
                 "nume": nume,
                 "prenume": prenume,
                 "username": username,
                 "email": email,
-                "parola": parola,
+                "parola": parola_hash,
                 "varsta": varsta,
                 "sex": sex,
                 "confirmat": True,
@@ -141,17 +141,27 @@ def login():
             
             utilizatori_gasiti = response.data
 
-            if utilizatori_gasiti and utilizatori_gasiti[0]['parola'] == parola:
+            if utilizatori_gasiti:
                 user = utilizatori_gasiti[0]
-                
-                session['user_id'] = user['id_utilizator']
-                session['username'] = user['username']
-                session['este_admin'] = user.get('admin', False)
-                
-                flash(f"Bine ai revenit, {user['prenume']}!", "success")
-                return redirect(url_for('index'))
-            else:
-                flash("Date de autentificare incorecte!", "error")
+                parola_stocata = user['parola']
+                valid_login = False
+
+                if check_password_hash(parola_stocata, parola):
+                    valid_login = True
+                elif parola_stocata == parola:
+                    # Fallback pentru parole existente salvate necriptat.
+                    valid_login = True
+                    nou_hash = generate_password_hash(parola)
+                    supabase.table('utilizatori').update({'parola': nou_hash}).eq('id_utilizator', user['id_utilizator']).execute()
+
+                if valid_login:
+                    session['user_id'] = user['id_utilizator']
+                    session['username'] = user['username']
+                    session['este_admin'] = user.get('admin', False)
+                    flash(f"Bine ai revenit, {user['prenume']}!", "success")
+                    return redirect(url_for('index'))
+                else:
+                    flash("Date de autentificare incorecte!", "error")
                 
         except Exception as e:
             flash(f"Eroare la autentificare: {e}", "error")
@@ -159,7 +169,7 @@ def login():
     return render_template('login.html')
 
 # ==========================================
-# 4. PAGINA DE CREARE EVENIMENT (HOST)
+# 4. PAGINA DE CREARE EVENIMENT (HOST) - Modificată pentru Upload Poze
 # ==========================================
 @app.route('/eveniment/nou', methods=['GET', 'POST'])
 def creeaza_eveniment():
@@ -169,6 +179,31 @@ def creeaza_eveniment():
 
     if request.method == 'POST':
         try:
+            imagine_url = None
+            
+            # Preluăm fișierul imaginii trimis din formularul HTML
+            fisier_imagine = request.files.get('imagine')
+            
+            if fisier_imagine and fisier_imagine.filename != '':
+                # Generăm un nume unic pentru fișier ca să evităm suprascrierea dacă doi utilizatori pun o poză cu același nume
+                extensie = os.path.splitext(fisier_imagine.filename)[1]
+                nume_unic_fisier = f"eveniment_{random.randint(100000, 999999)}{extensie}"
+                
+                # Citim conținutul binar al imaginii
+                date_fisier = fisier_imagine.read()
+                
+                # 1. Urcăm fișierul fizic în Supabase Storage Bucket
+                supabase.storage.from_('imagini-evenimente').upload(
+                    path=nume_unic_fisier,
+                    file=date_fisier,
+                    file_options={"content-type": fisier_imagine.content_type}
+                )
+                
+                # 2. Extragem URL-ul public generat automat de Bucket
+                res_url = supabase.storage.from_('imagini-evenimente').get_public_url(nume_unic_fisier)
+                imagine_url = res_url
+
+            # 3. Construim dicționarul complet pentru tabela din baza de date
             date_eveniment = {
                 "titlu": request.form.get('titlu'),
                 "descriere": request.form.get('descriere'),
@@ -180,16 +215,84 @@ def creeaza_eveniment():
                 "varsta_min": int(request.form.get('varsta_min')) if request.form.get('varsta_min') else None,
                 "varsta_max": int(request.form.get('varsta_max')) if request.form.get('varsta_max') else None,
                 "id_organizator": session.get('user_id'), 
-                "nr_maxim_participanti": int(request.form.get('nr_maxim_participanti')) if request.form.get('nr_maxim_participanti') else None
+                "nr_maxim_participanti": int(request.form.get('nr_maxim_participanti')) if request.form.get('nr_maxim_participanti') else None,
+                "imagine_url": imagine_url  # Salvăm link-ul text în baza de date
             }
+            
             supabase.table('evenimente').insert(date_eveniment).execute()
             flash("Evenimentul a fost creat cu succes!", "success")
             return redirect(url_for('index'))
             
         except Exception as e:
+            print(f"Eroare detaliată la crearea evenimentului: {e}")
             flash(f"Eroare la crearea evenimentului: {e}", "error")
 
     return render_template('creeaza_eveniment.html')
+
+# ==========================================
+# 4.1 PAGINA DE EDITARE EVENIMENT (HOST)
+# ==========================================
+@app.route('/eveniment/<int:id_eveniment>/editeaza', methods=['GET', 'POST'])
+def editeaza_eveniment(id_eveniment):
+    if not session.get('user_id'):
+        flash("Trebuie să fii autentificat pentru a edita un eveniment!", "error")
+        return redirect(url_for('login'))
+
+    try:
+        res_ev = supabase.table('evenimente').select('*').eq('id_eveniment', id_eveniment).execute()
+        if not res_ev.data:
+            flash("Evenimentul nu a fost găsit!", "error")
+            return redirect(url_for('index'))
+        
+        eveniment = res_ev.data[0]
+        
+        if eveniment['id_organizator'] != session.get('user_id'):
+            flash("Nu poți edita un eveniment pe care nu l-ai creat!", "error")
+            return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
+
+        if request.method == 'POST':
+            imagine_url = eveniment.get('imagine_url')
+            
+            fisier_imagine = request.files.get('imagine')
+            
+            if fisier_imagine and fisier_imagine.filename != '':
+                extensie = os.path.splitext(fisier_imagine.filename)[1]
+                nume_unic_fisier = f"eveniment_{random.randint(100000, 999999)}{extensie}"
+                
+                date_fisier = fisier_imagine.read()
+                
+                supabase.storage.from_('imagini-evenimente').upload(
+                    path=nume_unic_fisier,
+                    file=date_fisier,
+                    file_options={"content-type": fisier_imagine.content_type}
+                )
+                
+                res_url = supabase.storage.from_('imagini-evenimente').get_public_url(nume_unic_fisier)
+                imagine_url = res_url
+
+            date_actualizate = {
+                "titlu": request.form.get('titlu'),
+                "descriere": request.form.get('descriere'),
+                "tip": request.form.get('tip'),
+                "locatie": request.form.get('locatie'),
+                "data_ora": request.form.get('data_ora'),
+                "durata_minute": int(request.form.get('durata_minute')),
+                "data_limita_inscriere": request.form.get('data_limita_inscriere'),
+                "varsta_min": int(request.form.get('varsta_min')) if request.form.get('varsta_min') else None,
+                "varsta_max": int(request.form.get('varsta_max')) if request.form.get('varsta_max') else None,
+                "nr_maxim_participanti": int(request.form.get('nr_maxim_participanti')) if request.form.get('nr_maxim_participanti') else None,
+                "imagine_url": imagine_url
+            }
+            
+            supabase.table('evenimente').update(date_actualizate).eq('id_eveniment', id_eveniment).execute()
+            flash("Evenimentul a fost actualizat cu succes!", "success")
+            return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
+            
+    except Exception as e:
+        print(f"Eroare detaliată la editarea evenimentului: {e}")
+        flash(f"Eroare la editarea evenimentului: {e}", "error")
+
+    return render_template('editeaza_eveniment.html', eveniment=eveniment)
 
 # ==========================================
 # 5. LOGICA DE DECONECTARE (LOGOUT)
@@ -234,7 +337,6 @@ def detalii_eveniment(id_eveniment):
         
         eveniment = res_ev.data[0]
 
-        # Includem detaliile de profil ale autorilor întrebărilor (username, nume, prenume)
         res_intr = supabase.table('intrebari_evenimente')\
             .select('*, utilizatori(username, nume, prenume)')\
             .eq('id_eveniment', id_eveniment)\
@@ -242,11 +344,13 @@ def detalii_eveniment(id_eveniment):
             .execute()
         intrebari = res_intr.data
 
-        # Verificăm dacă utilizatorul curent deține acest eveniment
         este_organizator = (eveniment['id_organizator'] == user_id)
+        
+        # Filtru întrebări: organizatorul vede toate, iar ceilalți doar ale lor
+        if not este_organizator and user_id:
+            intrebari = [intr for intr in intrebari if intr.get('id_utilizator') == user_id]
         participanti = []
 
-        # Dacă este organizator, interogăm baza de date pentru lista completă de contacte
         if este_organizator:
             res_part = supabase.table('inscrieri')\
                 .select('utilizatori(nume, prenume, email, varsta)')\
@@ -340,7 +444,6 @@ def profil():
     user_id = session.get('user_id')
 
     try:
-        # 1. Preluăm datele complete ale utilizatorului din Supabase
         res_user = supabase.table('utilizatori').select('*').eq('id_utilizator', user_id).execute()
         if not res_user.data:
             flash("Utilizatorul nu a fost găsit!", "error")
@@ -348,11 +451,9 @@ def profil():
         
         date_profil = res_user.data[0]
 
-        # 2. Statistici: Numărăm câte evenimente a creat
         res_create = supabase.table('evenimente').select('id_eveniment', count='exact').eq('id_organizator', user_id).execute()
         nr_create = res_create.count if res_create.count is not None else len(res_create.data)
 
-        # 3. Statistici: Numărăm la câte evenimente s-a înscris în tabelul 'inscrieri'
         res_participari = supabase.table('inscrieri').select('id_inscriere', count='exact').eq('id_utilizator', user_id).execute()
         nr_participari = res_participari.count if res_participari.count is not None else len(res_participari.data)
 
@@ -378,17 +479,14 @@ def schimba_parola():
         parola_noua_confirmare = request.form.get('parola_noua_confirmare')
         user_id = session.get('user_id')
 
-        # 1. Validare primară: coincid cele două parole noi?
         if parola_noua != parola_noua_confirmare:
             flash("Parola nouă și confirmarea nu coincid!", "error")
             return render_template('schimba_parola.html')
 
         try:
-            # 2. Preluăm parola curentă din Supabase pentru a o verifica
             res_user = supabase.table('utilizatori').select('parola').eq('id_utilizator', user_id).execute()
             
             if res_user.data and res_user.data[0]['parola'] == parola_actuala:
-                # 3. Dacă parola actuală e corectă, facem update cu cea nouă
                 supabase.table('utilizatori')\
                     .update({"parola": parola_noua})\
                     .eq('id_utilizator', user_id)\
@@ -416,7 +514,6 @@ def trimite_email_recuperare(email_destinatar, parola_noua):
         print("⚠️ Configurația pentru trimiterea e-mailului lipsește din .env!")
         return False
 
-    # Structurăm mesajul e-mailului
     mesaj = MIMEMultipart()
     mesaj['From'] = email_expediator
     mesaj['To'] = email_destinatar
@@ -435,9 +532,8 @@ def trimite_email_recuperare(email_destinatar, parola_noua):
     mesaj.attach(MIMEText(corp_email, 'plain', 'utf-8'))
 
     try:
-        # Ne conectăm la serverul securizat SMTP al Google (port 587)
         server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()  # Securizăm conexiunea
+        server.starttls()
         server.login(email_expediator, parola_aplicatie)
         server.sendmail(email_expediator, email_destinatar, mesaj.as_string())
         server.quit()
@@ -455,7 +551,6 @@ def recuperare_parola():
         email = request.form.get('email')
 
         try:
-            # 1. Verificăm dacă e-mailul există în baza noastră de date
             res_user = supabase.table('utilizatori').select('id_utilizator').eq('email', email).execute()
             
             if res_user.data:

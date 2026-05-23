@@ -2,11 +2,25 @@
 
 {% block content %}
 <div class="container" style="margin-top: 2rem;">
-    
+    {% if eveniment.imagine_url %}
+        <article style="margin-bottom: 1.5rem; overflow: hidden; border-radius: 12px; border: 1px solid #2d3748;">
+            <img src="{{ eveniment.imagine_url }}" alt="Imagine eveniment {{ eveniment.titlu }}" style="width: 100%; height: auto; aspect-ratio: 16/9; object-fit: cover; display: block;">
+        </article>
+    {% else %}
+        <article style="margin-bottom: 1.5rem; background-color: #1a202c; border-radius: 12px; border: 1px solid #2d3748; padding: 3rem 1rem; text-align: center; color: #a0aec0;">
+            <strong>Imagine de eveniment indisponibilă</strong>
+        </article>
+    {% endif %}
+
     <article style="background-color: #141e30; border: 1px solid #2d3748;">
-        <header>
-            <h2 style="margin-bottom: 0.5rem; color: #fff;">{{ eveniment.titlu }}</h2>
-            <span class="badge" style="background-color: #3182ce; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 14px;">{{ eveniment.tip }}</span>
+        <header style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h2 style="margin-bottom: 0.5rem; color: #fff;">{{ eveniment.titlu }}</h2>
+                <span class="badge" style="background-color: #3182ce; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 14px;">{{ eveniment.tip }}</span>
+            </div>
+            {% if este_organizator %}
+                <a href="{{ url_for('editeaza_eveniment', id_eveniment=eveniment.id_eveniment) }}" role="button" class="outline" style="padding: 0.4rem 0.9rem; font-size: 13px; margin-bottom: 0;">✏️ Editează</a>
+            {% endif %}
         </header>
         
         <p style="font-size: 18px; color: #cbd5e0;">{{ eveniment.descriere }}</p>
@@ -61,6 +75,7 @@
         {% if intrebari %}
             <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2rem;">
             {% for intr in intrebari %}
+                {% if este_organizator or intr.id_utilizator == session.get('user_id') %}
                 <div style="background-color: #1a202c; padding: 1rem; border-radius: 6px; border-left: 4px solid #3182ce;">
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: #a0aec0; margin-bottom: 0.5rem;">
                         <strong>@{{ intr.utilizatori.username }} ({{ intr.utilizatori.prenume }} {{ intr.utilizatori.nume }})</strong>
@@ -82,6 +97,7 @@
                         </form>
                     {% endif %}
                 </div>
+                {% endif %}
             {% endfor %}
             </div>
         {% else %}

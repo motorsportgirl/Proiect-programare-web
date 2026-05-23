@@ -7,7 +7,7 @@
         <p style="text-align: center; color: gray;">Adună oameni cu aceleași pasiuni ca ale tale</p>
     </header>
 
-    <form action="{{ url_for('creeaza_eveniment') }}" method="POST">
+    <form action="{{ url_for('creeaza_eveniment') }}" method="POST" enctype="multipart/form-data">
         <label for="titlu">
             Titlul Evenimentului
             <input type="text" id="titlu" name="titlu" placeholder="ex: Meci amator de baschet 3v3" required>
@@ -48,6 +48,12 @@
         <label for="data_limita_inscriere">
             Data limită pentru înscrieri
             <input type="datetime-local" id="data_limita_inscriere" name="data_limita_inscriere" required>
+        </label>
+
+        <label for="imagine">
+            Imagine Eveniment (Opțional)
+            <input type="file" id="imagine" name="imagine" accept="image/*">
+            <small style="color: #a0aec0;">Recomandat: JPG, PNG sau WebP. Imaginea va fi folosită pe pagina principală și pe pagina de detalii.</small>
         </label>
 
         <label for="nr_maxim_participanti">
