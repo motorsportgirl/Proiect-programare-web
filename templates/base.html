@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HobbyPall - Organizare Evenimente</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body>
+    <nav class="container" style="border-bottom: 1px solid #2d3748; padding-bottom: 1rem;">
+        <ul>
+            <li><strong><a href="{{ url_for('index') }}" style="font-size: 22px; text-decoration: none;">HobbyPall 🎯</a></strong></li>
+        </ul>
+        <ul>
+            {% if session.get('user_id') %}
+                <li><a href="{{ url_for('creeaza_eveniment') }}" role="button" class="secondary">+ Host Event</a></li>
+                <li><a href="{{ url_for('index', filtru='particip') }}">Evenimentele Mele</a></li>
+                <li><a href="{{ url_for('evenimente_mine') }}">Create de Mine</a></li>
+                <li><a href="{{ url_for('profil') }}" style="font-weight: bold; color: var(--primary);">Profilul Meu 👤</a></li> 
+                <li><a href="{{ url_for('logout') }}" style="color: #ff4d4d; font-weight: bold;">Deconectare ({{ session.get('username') }})</a></li>
+            {% else %}
+                <li><a href="{{ url_for('login') }}">Autentificare</a></li>
+                <li><a href="{{ url_for('register') }}" role="button">Înregistrare</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <div class="container" style="margin-top: 1rem;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="pico-flash {{ category }}" style="padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; background-color: #1a202c; border-left: 4px solid {% if category=='success' %}#48bb78{% else %}#f56565{% endif %};">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <main class="container">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer class="container" style="text-align: center; margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #2d3748;">
+        <small>&copy; 2026 HobbyPall - Extinde-ți rețeaua socială.</small>
+    </footer>
+</body>
+</html>

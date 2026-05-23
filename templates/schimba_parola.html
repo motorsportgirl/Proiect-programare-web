@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<article style="max-width: 500px; margin: 3rem auto;">
+    <header>
+        <h2 style="text-align: center; margin-bottom: 0;">Securitate Cont 🔒</h2>
+        <p style="text-align: center; color: gray;">Schimbă parola contului tău</p>
+    </header>
+
+    <form action="{{ url_for('schimba_parola') }}" method="POST">
+        <label for="parola_actuala">
+            Parola Actuală
+            <input type="password" id="parola_actuala" name="parola_actuala" placeholder="••••••••" required>
+        </label>
+
+        <hr style="border-color: #2d3748; margin: 1.5rem 0;">
+
+        <label for="parola_noua">
+            Parola Nouă
+            <input type="password" id="parola_noua" name="parola_noua" placeholder="Minim 6 caractere" required>
+        </label>
+
+        <label for="parola_noua_confirmare">
+            Confirmă Parola Nouă
+            <input type="password" id="parola_noua_confirmare" name="parola_noua_confirmare" placeholder="Repetă parola nouă" required>
+        </label>
+
+        <button type="submit" class="secondary" style="margin-top: 1rem;">Actualizează Parola</button>
+    </form>
+</article>
+{% endblock %}

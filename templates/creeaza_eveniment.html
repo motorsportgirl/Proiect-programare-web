@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<article style="max-width: 700px; margin: 2rem auto;">
+    <header>
+        <h2 style="text-align: center; margin-bottom: 0;">Organizează un Eveniment Nou 📣</h2>
+        <p style="text-align: center; color: gray;">Adună oameni cu aceleași pasiuni ca ale tale</p>
+    </header>
+
+    <form action="{{ url_for('creeaza_eveniment') }}" method="POST">
+        <label for="titlu">
+            Titlul Evenimentului
+            <input type="text" id="titlu" name="titlu" placeholder="ex: Meci amator de baschet 3v3" required>
+        </label>
+
+        <label for="descriere">
+            Descriere
+            <textarea id="descriere" name="descriere" rows="4" placeholder="Detalii despre activitate, ce trebuie să aducă participanții etc." required></textarea>
+        </label>
+
+        <div class="grid">
+            <label for="tip">
+                Tipul Evenimentului
+                <select id="tip" name="tip" required>
+                    <option value="Fizic">Fizic (În persoană)</option>
+                    <option value="Online">Online (Zoom/Discord)</option>
+                </select>
+            </label>
+
+            <label for="locatie">
+                Locație / Link
+                <input type="text" id="locatie" name="locatie" placeholder="ex: Parcul Herăstrău SAU link Google Meet" required>
+            </label>
+        </div>
+
+        <div class="grid">
+            <label for="data_ora">
+                Data și Ora începerii
+                <input type="datetime-local" id="data_ora" name="data_ora" required>
+            </label>
+
+            <label for="durata_minute">
+                Durata (în minute)
+                <input type="number" id="durata_minute" name="durata_minute" min="15" placeholder="90" required>
+            </label>
+        </div>
+
+        <label for="data_limita_inscriere">
+            Data limită pentru înscrieri
+            <input type="datetime-local" id="data_limita_inscriere" name="data_limita_inscriere" required>
+        </label>
+
+        <label for="nr_maxim_participanti">
+            Număr maxim de participanți (Opțional)
+            <input type="number" id="nr_maxim_participanti" name="nr_maxim_participanti" min="1" placeholder="Lasă gol pentru locuri nelimitate">
+        </label>
+
+        <div class="grid">
+            <label for="varsta_min">
+                Vârstă Minimă (Opțional)
+                <input type="number" id="varsta_min" name="varsta_min" min="0" placeholder="Fără limită">
+            </label>
+
+            <label for="varsta_max">
+                Vârstă Maximă (Opțional)
+                <input type="number" id="varsta_max" name="varsta_max" min="0" placeholder="Fără limită">
+            </label>
+        </div>
+
+        <button type="submit" class="secondary">Publică Evenimentul</button>
+    </form>
+</article>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="max-width: 700px; margin-top: 3rem;">
+
+    <h2 style="margin-bottom: 2rem; border-bottom: 2px solid var(--primary); padding-bottom: 0.5rem;">👤 Profilul Meu</h2>
+
+    <div class="grid" style="margin-bottom: 2rem;">
+        <article style="background-color: #141e30; text-align: center; border-left: 5px solid #ffbc00; padding: 1.5rem;">
+            <h5 style="margin-bottom: 0.5rem; color: #a0aec0;">Evenimente Organizate</h5>
+            <h2 style="margin-bottom: 0; color: #ffbc00;">{{ nr_create }}</h2>
+        </article>
+        <article style="background-color: #141e30; text-align: center; border-left: 5px solid var(--primary); padding: 1.5rem;">
+            <h5 style="margin-bottom: 0.5rem; color: #a0aec0;">Evenimente la care participi</h5>
+            <h2 style="margin-bottom: 0; color: var(--primary);">{{ nr_participari }}</h2>
+        </article>
+    </div>
+
+    <article style="background-color: #141e30; border: 1px solid #2d3748;">
+        <header style="border-bottom: 1px solid #2d3748;">
+            <strong style="font-size: 18px; color: #fff;">Informații Cont: @{{ user.username }}</strong>
+            {% if user.admin %}
+                <span class="badge" style="float: right; background-color: #f56565; font-size: 11px;">Administrator</span>
+            {% endif %}
+        </header>
+
+        <table style="margin-bottom: 0; background-color: transparent;">
+            <tbody>
+                <tr>
+                    <td style="color: #a0aec0; width: 30%;"><strong>Nume complet:</strong></td>
+                    <td style="color: #fff;">{{ user.prenume }} {{ user.nume }}</td>
+                </tr>
+                <tr>
+                    <td style="color: #a0aec0;"><strong>Email:</strong></td>
+                    <td style="color: #fff;">{{ user.email }}</td>
+                </tr>
+                <tr>
+                    <td style="color: #a0aec0;"><strong>Vârstă:</strong></td>
+                    <td style="color: #fff;">{{ user.varsta }} ani</td>
+                </tr>
+                <tr>
+                    <td style="color: #a0aec0;"><strong>Gen (Sex):</strong></td>
+                    <td style="color: #fff;">{{ 'Masculin' if user.sex == 'M' else ('Feminin' if user.sex == 'F' else user.sex) }}</td>
+                </tr>
+                <tr>
+                    <td style="color: #a0aec0;"><strong>Status cont:</strong></td>
+                    <td>
+                        {% if user.confirmat %}
+                            <mark style="background-color: #2f855a; color: #fff; font-size: 12px; padding: 0.1rem 0.4rem; border-radius: 4px;">Confirmat</mark>
+                        {% else %}
+                            <mark style="background-color: #c53030; color: #fff; font-size: 12px; padding: 0.1rem 0.4rem; border-radius: 4px;">Neconfirmat</mark>
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="margin-top: 1.5rem; text-align: right;">
+            <a href="{{ url_for('schimba_parola') }}" role="button" class="outline secondary" style="width: auto;">
+                🔒 Schimbă Parola Contului
+            </a>
+        </div>
+    </article>
+
+</div>
+{% endblock %}

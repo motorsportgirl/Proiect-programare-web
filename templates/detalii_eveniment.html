@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+    
+    <article style="background-color: #141e30; border: 1px solid #2d3748;">
+        <header>
+            <h2 style="margin-bottom: 0.5rem; color: #fff;">{{ eveniment.titlu }}</h2>
+            <span class="badge" style="background-color: #3182ce; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 14px;">{{ eveniment.tip }}</span>
+        </header>
+        
+        <p style="font-size: 18px; color: #cbd5e0;">{{ eveniment.descriere }}</p>
+        
+        <footer>
+            <div class="grid" style="font-size: 14px; color: #a0aec0;">
+                <div>📍 <strong>Locație:</strong> {{ eveniment.locatie }}</div>
+                <div>📅 <strong>Data și Ora:</strong> {{ eveniment.data_ora|replace('T', ' ') }}</div>
+                <div>⏱️ <strong>Durată:</strong> {{ eveniment.durata_minute }} minute</div>
+            </div>
+        </footer>
+    </article>
+
+    {% if este_organizator %}
+    <article style="background-color: #1a202c; border: 1px solid #4a5568;">
+        <header style="border-bottom: 1px solid #4a5568;">
+            <h3 style="margin-bottom: 0; color: #48bb78;">👥 Panou Organizator: Participanți Înscriși ({{ participanti|length }})</h3>
+        </header>
+        
+        {% if participanti %}
+            <figure>
+                <table style="width: 100%; margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="color: #fff;">Nume complet</th>
+                            <th style="color: #fff;">Email Contact</th>
+                            <th style="color: #fff;">Vârsta</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in participanti %}
+                        <tr>
+                            <td style="color: #cbd5e0;">{{ p.prenume }} {{ p.nume }}</td>
+                            <td>
+                                <a href="mailto:{{ p.email }}" style="color: #3182ce; text-decoration: underline;">{{ p.email }}</a>
+                            </td>
+                            <td style="color: #cbd5e0;">{{ p.varsta }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </figure>
+        {% else %}
+            <p style="color: #a0aec0; margin-bottom: 0; font-style: italic;">Nicio persoană nu s-a înscris încă la acest eveniment.</p>
+        {% endif %}
+    </article>
+    {% endif %}
+
+    <article style="background-color: #141e30; border: 1px solid #2d3748;">
+        <h3>💬 Întrebări și Discuții</h3>
+        
+        {% if intrebari %}
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2rem;">
+            {% for intr in intrebari %}
+                <div style="background-color: #1a202c; padding: 1rem; border-radius: 6px; border-left: 4px solid #3182ce;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #a0aec0; margin-bottom: 0.5rem;">
+                        <strong>@{{ intr.utilizatori.username }} ({{ intr.utilizatori.prenume }} {{ intr.utilizatori.nume }})</strong>
+                    </div>
+                    <p style="margin-bottom: 0.5rem; color: #fff;">{{ intr.continut }}</p>
+
+                    {% if intr.raspuns_organizator %}
+                        <div style="margin-top: 1rem; margin-left: 2rem; padding: 0.75rem; background-color: #2d3748; border-radius: 6px; border-left: 4px solid #48bb78;">
+                            <small style="color: #48bb78; font-weight: bold; display: block; margin-bottom: 0.2rem;">📢 Răspunsul Organizatorului:</small>
+                            <p style="margin-bottom: 0; color: #cbd5e0;">{{ intr.raspuns_organizator }}</p>
+                        </div>
+                    {% elif este_organizator %}
+                        <form action="{{ url_for('raspunde_intrebare', id_intrebare=intr.id_intrebare) }}" method="POST" style="margin-top: 1rem; margin-left: 2rem; margin-bottom: 0;">
+                            <input type="hidden" name="id_eveniment" value="{{ eveniment.id_eveniment }}">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="text" name="raspuns_organizator" placeholder="Scrie un răspuns oficial..." required style="margin-bottom: 0; font-size: 14px;">
+                                <button type="submit" class="success" style="padding: 0.25rem 1rem; font-size: 14px; margin-bottom: 0; width: auto;">Trimite</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            </div>
+        {% else %}
+            <p style="color: #a0aec0; font-style: italic;">Nu s-au pus întrebări momentan. Fii primul care întreabă ceva!</p>
+        {% endif %}
+
+        {% if not este_organizator %}
+            <hr style="border-color: #2d3748;">
+            <form action="{{ url_for('detalii_eveniment', id_eveniment=eveniment.id_eveniment) }}" method="POST" style="margin-top: 1.5rem;">
+                <label for="continut" style="color: #cbd5e0;">Ai o nelămurire? Pune o întrebare organizatorului:</label>
+                <textarea id="continut" name="continut" rows="2" placeholder="ex: Unde ne întâlnim mai exact în parcul herăstrău?" required></textarea>
+                <button type="submit" style="width: auto; float: right;">Trimite Întrebarea</button>
+            </form>
+        {% endif %}
+    </article>
+
+</div>
+{% endblock %}
