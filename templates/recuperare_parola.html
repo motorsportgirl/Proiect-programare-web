@@ -3,7 +3,7 @@
 {% block content %}
 <article style="max-width: 500px; margin: 3rem auto;">
     <header>
-        <h2 style="text-align: center; margin-bottom: 0;">Recuperare Cont 🔑</h2>
+        <h2 style="text-align: center; margin-bottom: 0;">Recuperare cont 🔑</h2>
         <p style="text-align: center; color: gray;">Introdu e-mailul pentru a primi o parolă nouă</p>
     </header>
 
@@ -13,11 +13,19 @@
             <input type="email" id="email" name="email" placeholder="nume@exemplu.com" required>
         </label>
 
-        <button type="submit" class="secondary" style="margin-top: 1rem;">Trimite Parolă Nouă</button>
+        <button type="submit" class="secondary" style="margin-top: 1rem;">Trimite parolă nouă</button>
     </form>
+
+    {% if generated_password %}
+    <div style="margin-top: 1.5rem; padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--background-color);">
+        <strong style="display: block; margin-bottom: 0.5rem; color: var(--text-color);">Parola nouă generată</strong>
+        <code style="display: block; padding: 0.75rem; border-radius: 8px; background: var(--card-background); font-size: 18px; text-align: center;">{{ generated_password }}</code>
+        <small style="display: block; margin-top: 0.75rem; color: var(--muted-color);">Folosește această parolă la autentificare, apoi schimb-o din profil.</small>
+    </div>
+    {% endif %}
     
     <footer style="text-align: center; margin-top: 1rem;">
-        <a href="{{ url_for('login') }}" style="font-size: 14px;">Înapoi la Autentificare</a>
+        <a href="{{ url_for('login') }}" style="font-size: 14px;">Înapoi la autentificare</a>
     </footer>
 </article>
 {% endblock %}

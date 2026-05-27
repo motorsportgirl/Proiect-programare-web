@@ -1,76 +1,105 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
+    {% if not request.args.get('filtru') and not cautare %}
+    <section class="hero-banner hero-image-banner" aria-label="HobbyPall">
+        <div class="hero-logo-wrap">
+            <img class="hero-banner-logo" src="{{ url_for('static', filename='images/banner.png') }}" alt="HobbyPall">
+        </div>
+        <p class="hero-motto" style="font-size: 22px; opacity: 0.95; font-weight: 500;">Locul unde pasiunile tale prind viață.</p>
+    </section>
+    {% endif %}
+
 <div class="container" style="margin-top: 2rem;">
 
-    <section style="text-align: center; padding: 3rem 1rem; background-color: #141e30; border-radius: 8px; border: 1px solid #2d3748; margin-bottom: 3rem;">
-        <h1 style="font-size: 48px; color: #fff; margin-bottom: 0.5rem;">HobbyPall</h1>
-        <p style="font-size: 20px; color: #a0aec0; margin-bottom: 0;">Locul unde îți găsești persoane cu aceleași pasiuni ca tine. 🎯</p>
-    </section>
+    <div id="events" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 2.5rem; gap: 1.5rem;">
+        <h3 style="margin-bottom: 0; font-size: 28px;">{{ titru_sectiune }}</h3>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 1.5rem; gap: 1rem;">
-        <h3 style="margin-bottom: 0;">{{ titru_sectiune }}</h3>
+        <form action="{{ url_for('index') }}" method="GET" style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0; flex: 1; max-width: 520px;">
+            {% if request.args.get('filtru') %}
+                <input type="hidden" name="filtru" value="{{ request.args.get('filtru') }}">
+            {% endif %}
+            <input type="search" name="q" value="{{ cautare or '' }}" placeholder="Caută după titlu, tip sau locație" style="margin-bottom: 0; border-radius: 999px;">
+            <button type="submit" class="primary" style="margin-bottom: 0; width: auto;">Caută</button>
+        </form>
         
-        <div role="group" style="margin-bottom: 0;">
-            <span style="align-self: center; margin-right: 0.5rem; color: #a0aec0; font-size: 14px;">Sortează după:</span>
-            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='data_ora') }}" 
+        <div role="group" style="margin-bottom: 0; background: var(--card-background); padding: 0.4rem; border-radius: 50px; border: 1px solid var(--border-color); display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='data_ora', q=cautare) }}" 
                class="button {% if sortare_curenta == 'data_ora' or not sortare_curenta %}primary{% else %}outline secondary{% endif %}" 
-               style="padding: 0.25rem 0.75rem; font-size: 13px; text-decoration: none;">📅 Dată</a>
+               style="padding: 0.5rem 1.5rem; font-size: 14px; border: none; margin-bottom: 0; border-radius: 50px !important;">Dată</a>
             
-            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='tip') }}" 
+            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='tip', q=cautare) }}" 
                class="button {% if sortare_curenta == 'tip' %}primary{% else %}outline secondary{% endif %}" 
-               style="padding: 0.25rem 0.75rem; font-size: 13px; text-decoration: none;">🏷️ Tip Eveniment</a>
+               style="padding: 0.5rem 1.5rem; font-size: 14px; border: none; margin-bottom: 0; border-radius: 50px !important;">Tip</a>
             
-            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='locatie') }}" 
+            <a href="{{ url_for('index', filtru=request.args.get('filtru'), sortare='locatie', q=cautare) }}" 
                class="button {% if sortare_curenta == 'locatie' %}primary{% else %}outline secondary{% endif %}" 
-               style="padding: 0.25rem 0.75rem; font-size: 13px; text-decoration: none;">📍 Locație</a>
+               style="padding: 0.5rem 1.5rem; font-size: 14px; border: none; margin-bottom: 0; border-radius: 50px !important;">Locație</a>
         </div>
     </div>
         
     {% if evenimente %}
-        <div style="display: flex; flex-direction: column; gap: 2rem;">
+        <div class="events-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 2.5rem;">
         {% for ev in evenimente %}
-            {% if ev.imagine_url %}
-                <article style="background: linear-gradient(rgba(0,0,0,0.48), rgba(0,0,0,0.48)), url('{{ ev.imagine_url }}') center/cover no-repeat; border: 1px solid #2d3748; color: #fff; display: flex; flex-direction: column; justify-content: space-between; border-radius: 8px; overflow: hidden;">
-            {% else %}
-                <article style="background-color: #141e30; border: 1px solid #2d3748; color: #cbd5e0; display: flex; flex-direction: column; justify-content: space-between; border-radius: 8px; overflow: hidden;">
-            {% endif %}
-                <header style="padding: 1.5rem;">
-                    <a href="{{ url_for('detalii_eveniment', id_eveniment=ev.id_eveniment) }}" style="text-decoration: none; color: inherit;">
-                        <strong style="font-size: 24px; text-decoration: underline;">{{ ev.titlu }}</strong>
-                    </a>
-                    <span style="display: inline-block; margin-top: 0.75rem; font-size: 12px; padding: 0.4rem 0.7rem; background-color: rgba(49,130,206,0.9); border-radius: 4px; color: #fff;">{{ ev.tip }}</span>
-                </header>
-                <div style="padding: 0 1.5rem 1.5rem 1.5rem;">
-                    <p style="margin-bottom: 1.5rem; line-height: 1.6;">{{ ev.descriere }}</p>
-                    <footer style="display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap;">
-                        <small style="color: inherit; opacity: 0.9; font-size: 0.95rem; line-height: 1.8;">
-                            📍 {{ ev.locatie }}<br>
-                            📅 {{ ev.data_ora|replace('T', ' ') }}<br>
-                            {% if ev.nr_maxim_participanti %}
-                                👥 {{ ev.locouri_ocupate }} / {{ ev.nr_maxim_participanti }}{% if ev.este_plin %} <span style="color: #f56565; font-weight: bold;">(Complet)</span>{% endif %}
-                            {% else %}
-                                👥 Locuri nelimitate
-                            {% endif %}
-                        </small>
-                        {% if session.get('user_id') %}
-                            {% if ev.id_organizator != session.get('user_id') and not request.args.get('filtru') %}
-                                {% if ev.este_plin %}
-                                    <button class="secondary" disabled style="padding: 0.5rem 1rem; font-size: 13px; margin-bottom: 0; width: auto;">Fără locuri</button>
+            <article class="event-card" style="display: flex; flex-direction: column; height: 100%; padding: 0 !important; overflow: hidden; border: none !important; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                <div style="height: 200px; width: 100%; position: relative; overflow: hidden;">
+                    {% if ev.imagine_url %}
+                        <img src="{{ ev.imagine_url }}" alt="{{ ev.titlu }}" style="width: 100%; height: 100%; object-fit: cover; transition: var(--transition);">
+                    {% else %}
+                        <div style="width: 100%; height: 100%; background: var(--primary-gradient); opacity: 0.8; display: flex; align-items: center; justify-content: center; color: white; font-size: 3rem;">
+                            ✨
+                        </div>
+                    {% endif %}
+                    <div style="position: absolute; top: 1rem; left: 1rem; background: rgba(255,255,255,0.9); padding: 0.3rem 0.8rem; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--primary); backdrop-filter: blur(4px);">
+                        ✨ {{ ev.tip }}
+                    </div>
+                </div>
+
+                <div style="padding: 1.5rem; flex-grow: 1; display: flex; flex-direction: column;">
+                    <h4 style="margin-bottom: 0.75rem; font-size: 22px;">
+                        <a href="{{ url_for('detalii_eveniment', id_eveniment=ev.id_eveniment) }}" style="text-decoration: none; color: inherit;">
+                            {{ ev.titlu }}
+                        </a>
+                    </h4>
+                    <p style="color: var(--muted-color); font-size: 15px; line-height: 1.6; margin-bottom: 1.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                        {{ ev.descriere }}
+                    </p>
+                    
+                    <div style="margin-top: auto;">
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 14px; color: var(--muted-color); font-weight: 500;">
+                            <div>📍 {{ ev.locatie }}</div>
+                            <div>📅 {{ ev.data_ora|replace('T', ' ') }}</div>
+                            <div>
+                                {% if ev.nr_maxim_participanti %}
+                                    👥 {{ ev.locuri_ocupate }} / {{ ev.nr_maxim_participanti }} participanți
+                                    {% if ev.este_plin %} <span style="color: #f43f5e; font-weight: 700;">(Complet)</span>{% endif %}
                                 {% else %}
-                                    <a href="{{ url_for('participa', id_eveniment=ev.id_eveniment) }}" role="button" class="outline" style="padding: 0.5rem 1rem; font-size: 13px; margin-bottom: 0; width: auto;">Participă</a>
+                                    👥 Locuri nelimitate
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if session.get('user_id') %}
+                            {% if ev.id_organizator == session.get('user_id') %}
+                                <a href="{{ url_for('detalii_eveniment', id_eveniment=ev.id_eveniment) }}" role="button" class="outline" style="width: 100%;">Vezi participanți</a>
+                            {% elif not request.args.get('filtru') %}
+                                {% if ev.este_plin %}
+                                    <button class="secondary" disabled style="width: 100%; border: none;">Fără locuri</button>
+                                {% else %}
+                                    <a href="{{ url_for('participa', id_eveniment=ev.id_eveniment) }}" role="button" class="primary" style="width: 100%;">Participă</a>
                                 {% endif %}
                             {% endif %}
                         {% endif %}
-                    </footer>
+                    </div>
                 </div>
             </article>
         {% endfor %}
         </div>
     {% else %}
-        <blockquote style="margin-top: 2rem; background-color: #1a202c;">
-            Nu există niciun eveniment de afișat în această secțiune momentan.
-        </blockquote>
+        <article style="text-align: center; padding: 4rem !important;">
+            <p style="font-size: 1.2rem; color: var(--muted-color); margin-bottom: 0;">Nu am găsit evenimente pentru această selecție.</p>
+        </article>
     {% endif %}
 
 </div>
