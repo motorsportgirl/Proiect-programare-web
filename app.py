@@ -5,11 +5,13 @@ import string
 import smtplib
 from email.message import EmailMessage
 from pathlib import Path
-
+import webbrowser
+import threading
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+
 
 load_dotenv()
 
@@ -829,4 +831,13 @@ def surpriza():
 init_db()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+
+    def _open_browser():
+        url = "http://127.0.0.1:5000/"
+        try:
+            webbrowser.open_new(url)
+        except Exception:
+            pass
+
+    threading.Timer(1.0, _open_browser).start()
+    app.run(debug=True, use_reloader=False, port=5000)
