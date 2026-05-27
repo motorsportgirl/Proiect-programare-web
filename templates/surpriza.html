@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="max-width: 800px; margin-top: 2rem;">
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h2 style="background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 42px; margin-bottom: 0.5rem;">✨ Surpriză!</h2>
+        <p style="color: var(--muted-color); font-size: 18px;">Am găsit acest eveniment special pentru tine.</p>
+    </div>
+
+    <article style="padding: 0 !important; overflow: hidden; border: none !important; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.25);">
+        <div style="height: 350px; width: 100%; position: relative;">
+            {% if eveniment.imagine_url %}
+                <img src="{{ eveniment.imagine_url }}" alt="{{ eveniment.titlu }}" style="width: 100%; height: 100%; object-fit: cover;">
+            {% else %}
+                <div style="width: 100%; height: 100%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 6rem;">
+                    🎲
+                </div>
+            {% endif %}
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 2.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.9)); color: white;">
+                <span style="background: var(--primary-gradient); padding: 0.4rem 1rem; border-radius: 8px; font-size: 14px; font-weight: 700; margin-bottom: 0.75rem; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    {{ eveniment.tip }}
+                </span>
+                <h1 style="margin-bottom: 0; font-size: 48px; letter-spacing: -0.02em;">{{ eveniment.titlu }}</h1>
+            </div>
+        </div>
+
+        <div style="padding: 3rem;">
+            <div class="grid">
+                <div>
+                    <h5 style="margin-bottom: 1rem; color: var(--primary); font-size: 20px;">De ce să participi?</h5>
+                    <p style="font-size: 18px; line-height: 1.8; color: var(--muted-color); margin-bottom: 2rem;">{{ eveniment.descriere }}</p>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <a href="{{ url_for('detalii_eveniment', id_eveniment=eveniment.id_eveniment) }}" role="button" class="primary" style="flex: 2;">Vezi detalii complete</a>
+                        <a href="{{ url_for('surpriza') }}" role="button" class="outline secondary" style="flex: 1; border-color: var(--border-color) !important;">🎲 Altul!</a>
+                    </div>
+                </div>
+                
+                <div style="background: var(--background-color); padding: 2rem; border-radius: 20px; border: 1px solid var(--border-color); height: fit-content;">
+                    <h6 style="margin-bottom: 1.5rem; font-size: 18px;">Info rapid</h6>
+                    <div style="display: flex; flex-direction: column; gap: 1.25rem; font-size: 16px;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 1.5rem;">📍</span> 
+                            <span><strong>{{ eveniment.locatie }}</strong></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 1.5rem;">📅</span> 
+                            <span>{{ eveniment.data_ora|replace('T', ' ') }}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 1.5rem;">👥</span> 
+                            <span>{{ eveniment.locuri_ocupate }} / {{ eveniment.nr_maxim_participanti or '∞' }} locuri</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </article>
+
+    <div style="text-align: center; margin-top: 3rem;">
+        <a href="{{ url_for('index') }}" style="color: var(--muted-color); font-weight: 600; text-decoration: none;">← Înapoi la toate evenimentele</a>
+    </div>
+</div>
+{% endblock %}

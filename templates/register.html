@@ -1,68 +1,66 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<article style="max-width: 600px; margin: 2rem auto; background-color: #141e30; border: 1px solid #2d3748;">
-    <header style="text-align: center; border-bottom: 1px solid #2d3748;">
-        <h2 style="margin-bottom: 0;">Creează un cont nou 🎯</h2>
-        <p style="color: #a0aec0; font-size: 14px;">Alătură-te comunității HobbyPall</p>
-    </header>
+<div class="container" style="max-width: 600px; margin-top: 3rem;">
+    <article style="padding: 3rem !important; border-top: 6px solid #f59e0b;">
+        <header style="text-align: center; margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 0.5rem; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Creează un cont</h2>
+            <p style="color: var(--muted-color);">Alătură-te comunității HobbyPall</p>
+        </header>
 
-    <form action="{{ url_for('register') }}" method="POST">
-        <div class="grid">
-            <label for="nume" style="color: #cbd5e0;">
-                Nume
-                <input type="text" id="nume" name="nume" placeholder="Popescu" required style="background-color: #1a202c; border-color: #2d3748;">
-            </label>
-            <label for="prenume" style="color: #cbd5e0;">
-                Prenume
-                <input type="text" id="prenume" name="prenume" placeholder="Ion" required style="background-color: #1a202c; border-color: #2d3748;">
-            </label>
-        </div>
+        <form action="{{ url_for('register') }}" method="POST">
+            <div class="grid">
+                <div style="margin-bottom: 1rem;">
+                    <label style="font-weight: 600; font-size: 14px;">Prenume</label>
+                    <input type="text" name="prenume" placeholder="Ion" required style="border-radius: 10px;">
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="font-weight: 600; font-size: 14px;">Nume</label>
+                    <input type="text" name="nume" placeholder="Popescu" required style="border-radius: 10px;">
+                </div>
+            </div>
 
-        <label for="username" style="color: #cbd5e0;">
-            Nume utilizator (Username)
-            <input type="text" id="username" name="username" placeholder="ion_popescu" required style="background-color: #1a202c; border-color: #2d3748;">
-        </label>
+            <div style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 14px;">Username</label>
+                <input type="text" name="username" placeholder="ionp123" required style="border-radius: 10px;">
+            </div>
 
-        <label for="email" style="color: #cbd5e0;">
-            Adresă de email
-            <input type="email" id="email" name="email" placeholder="nume@exemplu.com" required style="background-color: #1a202c; border-color: #2d3748;">
-        </label>
+            <div style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 14px;">Email</label>
+                <input type="email" name="email" placeholder="ion@exemplu.com" required style="border-radius: 10px;">
+            </div>
 
-        <label for="parola" style="color: #cbd5e0;">
-            Parolă
-            <input type="password" id="parola" name="parola" placeholder="••••••••" required style="background-color: #1a202c; border-color: #2d3748;">
-        </label>
+            <div style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 14px;">Parolă</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input type="password" name="parola" id="parola_reg" placeholder="••••••••" required style="border-radius: 10px; padding-right: 3.5rem; margin-bottom: 0;">
+                    <span onclick="togglePassword('parola_reg')" style="position: absolute; right: 1rem; cursor: pointer; opacity: 0.6; font-size: 1.2rem; user-select: none;">👁️</span>
+                </div>
+            </div>
 
-        <label style="color: #a0aec0; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-            <input type="checkbox" id="show_password_register" onclick="togglePassword('parola')">
-            Arată parola
-        </label>
+            <div class="grid">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="font-weight: 600; font-size: 14px;">Vârstă</label>
+                    <input type="number" name="varsta" min="14" value="18" required style="border-radius: 10px;">
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="font-weight: 600; font-size: 14px;">Gen</label>
+                    <select name="sex" style="border-radius: 10px;">
+                        <option value="M">Masculin</option>
+                        <option value="F">Feminin</option>
+                        <option value="Altu">Altul</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="grid">
-            <label for="varsta" style="color: #cbd5e0;">
-                Vârstă
-                <input type="number" id="varsta" name="varsta" min="14" max="100" placeholder="18" required style="background-color: #1a202c; border-color: #2d3748;">
-            </label>
+            <button type="submit" class="primary" style="width: 100%; padding: 0.8rem;">Creează contul</button>
+        </form>
 
-            <label for="sex" style="color: #cbd5e0;">
-                Gen (Sex)
-                <select id="sex" name="sex" required style="background-color: #1a202c; border-color: #2d3748;">
-                    <option value="" disabled selected>Alege...</option>
-                    <option value="M">Masculin</option>
-                    <option value="F">Feminin</option>
-                    <option value="Altul">Altul</option>
-                </select>
-            </label>
-        </div>
-
-        <button type="submit" class="contrast" style="margin-top: 1rem;">Înregistrare</button>
-    </form>
-
-    <footer style="border-top: 1px solid #2d3748; padding-top: 1rem;">
-        <p style="text-align: center; margin-bottom: 0; font-size: 14px;">
-            Ai deja un cont? <a href="{{ url_for('login') }}">Autentifică-te aici</a>
-        </p>
-    </footer>
-</article>
+        <footer style="text-align: center; margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+            <p style="font-size: 14px; color: var(--muted-color); margin-bottom: 0;">
+                Ai deja cont? <a href="{{ url_for('login') }}" style="color: var(--primary); font-weight: 700;">Autentifică-te</a>
+            </p>
+        </footer>
+    </article>
+</div>
 {% endblock %}

@@ -1,39 +1,38 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<article style="max-width: 450px; margin: 4rem auto; background-color: #141e30; border: 1px solid #2d3748;">
-    <header style="text-align: center; border-bottom: 1px solid #2d3748;">
-        <h2 style="margin-bottom: 0;">Autentificare Cont 🔐</h2>
-        <p style="color: #a0aec0; font-size: 14px;">Introdu datele tale pentru a continua</p>
-    </header>
+<div class="container" style="max-width: 500px; margin-top: 5rem;">
+    <article style="padding: 3rem !important; border-top: 6px solid var(--primary);">
+        <header style="text-align: center; margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 0.5rem; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Bine ai revenit!</h2>
+            <p style="color: var(--muted-color);">Accesează-ți contul HobbyPall</p>
+        </header>
 
-    <form action="{{ url_for('login') }}" method="POST">
-        <label for="email" style="color: #cbd5e0;">
-            Adresă de email / Username
-            <input type="text" id="email" name="email" placeholder="ion_popescu sau email@exemplu.com" required style="background-color: #1a202c; border-color: #2d3748;">
-        </label>
+        <form action="{{ url_for('login') }}" method="POST">
+            <div style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 14px;">Email sau username</label>
+                <input type="text" name="email" placeholder="ex: ionp" required style="border-radius: 10px;">
+            </div>
 
-        <label for="parola" style="color: #cbd5e0;">
-            Parolă
-            <input type="password" id="parola" name="parola" placeholder="••••••••" required style="background-color: #1a202c; border-color: #2d3748;">
-        </label>
+            <div style="margin-bottom: 2rem;">
+                <label style="font-weight: 600; font-size: 14px;">Parolă</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input type="password" name="parola" id="parola" placeholder="••••••••" required style="border-radius: 10px; padding-right: 3.5rem; margin-bottom: 0;">
+                    <span onclick="togglePassword('parola')" style="position: absolute; right: 1rem; cursor: pointer; opacity: 0.6; font-size: 1.2rem; user-select: none;">👁️</span>
+                </div>
+                <div style="text-align: right; margin-top: 0.5rem;">
+                    <a href="{{ url_for('recuperare_parola') }}" style="font-size: 13px; color: var(--muted-color);">Ai uitat parola?</a>
+                </div>
+            </div>
 
-        <label style="color: #a0aec0; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-            <input type="checkbox" id="show_password_login" onclick="togglePassword('parola')">
-            Arată parola
-        </label>
+            <button type="submit" class="primary" style="width: 100%; padding: 0.8rem;">Autentificare</button>
+        </form>
 
-        <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1.5rem;">
-            <a href="{{ url_for('recuperare_parola') }}" style="font-size: 14px; color: #a0aec0;">Mi-am uitat parola</a>
-        </div>
-
-        <button type="submit" style="margin-top: 1rem;">Conectare</button>
-    </form>
-
-    <footer style="border-top: 1px solid #2d3748; padding-top: 1rem;">
-        <p style="text-align: center; margin-bottom: 0; font-size: 14px;">
-            Nu ai un cont încă? <a href="{{ url_for('register') }}">Creează unul acum</a>
-        </p>
-    </footer>
-</article>
+        <footer style="text-align: center; margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+            <p style="font-size: 14px; color: var(--muted-color); margin-bottom: 0;">
+                Nu ai cont? <a href="{{ url_for('register') }}" style="color: var(--primary); font-weight: 700;">Înregistrează-te</a>
+            </p>
+        </footer>
+    </article>
+</div>
 {% endblock %}

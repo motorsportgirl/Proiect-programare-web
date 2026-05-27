@@ -1,584 +1,843 @@
 import os
-import webbrowser
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-from supabase import create_client, Client
-from dotenv import load_dotenv
-from werkzeug.security import generate_password_hash, check_password_hash
-import smtplib
 import random
+import sqlite3
 import string
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import smtplib
+from email.message import EmailMessage
+from pathlib import Path
+import webbrowser
+import threading
+from dotenv import load_dotenv
+from flask import Flask, flash, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
 
 load_dotenv()
 
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "hobbypall.db"
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "proiectul_meu_super_secret_hobbypall_2026")
+app.config["UPLOAD_FOLDER"] = str(BASE_DIR / "static" / "uploads" / "avatars")
+app.config["EVENT_UPLOAD_FOLDER"] = str(BASE_DIR / "static" / "uploads" / "events")
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(app.config["EVENT_UPLOAD_FOLDER"], exist_ok=True)
 
-# Conexiunea oficială cu Supabase
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+EVENT_TYPES = [
+    "Sport",
+    "Social",
+    "Gaming",
+    "Artă",
+    "Muzică",
+    "Lectură",
+    "Outdoor",
+    "Voluntariat",
+    "Online",
+]
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("⚠️ ATENȚIE: Credențialele Supabase lipsesc din fișierul .env!")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
-# ==========================================
-# 1. PAGINA HOME (INDEX) - Cu Verificare Locuri și Ordonare Recentă
-# ==========================================
-@app.route('/')
+
+def row_to_dict(row):
+    return dict(row) if row else None
+
+
+def current_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    with get_db() as conn:
+        user = conn.execute("SELECT * FROM utilizatori WHERE id_utilizator = ?", (user_id,)).fetchone()
+    if not user:
+        session.clear()
+        return None
+    return row_to_dict(user)
+
+
+def sync_avatar_session(user):
+    if user:
+        session["avatar_type"] = user.get("avatar_type") or "emoji"
+        session["avatar_url"] = user.get("avatar_url") or "🐼"
+
+
+def init_db():
+    with get_db() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS utilizatori (
+                id_utilizator INTEGER PRIMARY KEY AUTOINCREMENT,
+                nume TEXT NOT NULL,
+                prenume TEXT NOT NULL,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                parola TEXT NOT NULL,
+                varsta INTEGER NOT NULL,
+                sex TEXT NOT NULL,
+                admin INTEGER NOT NULL DEFAULT 0,
+                confirmat INTEGER NOT NULL DEFAULT 1,
+                avatar_type TEXT NOT NULL DEFAULT 'emoji',
+                avatar_url TEXT NOT NULL DEFAULT '🐼',
+                creat_la TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS evenimente (
+                id_eveniment INTEGER PRIMARY KEY AUTOINCREMENT,
+                titlu TEXT NOT NULL,
+                descriere TEXT NOT NULL,
+                tip TEXT NOT NULL,
+                locatie TEXT NOT NULL,
+                data_ora TEXT NOT NULL,
+                durata_minute INTEGER NOT NULL,
+                data_limita_inscriere TEXT NOT NULL,
+                varsta_min INTEGER,
+                varsta_max INTEGER,
+                id_organizator INTEGER NOT NULL,
+                nr_maxim_participanti INTEGER,
+                imagine_url TEXT,
+                creat_la TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (id_organizator) REFERENCES utilizatori(id_utilizator) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS inscrieri (
+                id_inscriere INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_utilizator INTEGER NOT NULL,
+                id_eveniment INTEGER NOT NULL,
+                creat_la TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (id_utilizator, id_eveniment),
+                FOREIGN KEY (id_utilizator) REFERENCES utilizatori(id_utilizator) ON DELETE CASCADE,
+                FOREIGN KEY (id_eveniment) REFERENCES evenimente(id_eveniment) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS intrebari (
+                id_intrebare INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_eveniment INTEGER NOT NULL,
+                id_utilizator INTEGER NOT NULL,
+                continut TEXT NOT NULL,
+                raspuns_organizator TEXT,
+                creat_la TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (id_eveniment) REFERENCES evenimente(id_eveniment) ON DELETE CASCADE,
+                FOREIGN KEY (id_utilizator) REFERENCES utilizatori(id_utilizator) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS recenzii (
+                id_recenzie INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_eveniment INTEGER NOT NULL,
+                id_utilizator INTEGER NOT NULL,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                continut TEXT NOT NULL,
+                creat_la TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (id_eveniment, id_utilizator),
+                FOREIGN KEY (id_eveniment) REFERENCES evenimente(id_eveniment) ON DELETE CASCADE,
+                FOREIGN KEY (id_utilizator) REFERENCES utilizatori(id_utilizator) ON DELETE CASCADE
+            );
+            """
+        )
+
+        count = conn.execute("SELECT COUNT(*) FROM utilizatori").fetchone()[0]
+        if count == 0:
+            conn.execute(
+                """
+                INSERT INTO utilizatori
+                (nume, prenume, username, email, parola, varsta, sex, admin, confirmat, avatar_type, avatar_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "Popescu",
+                    "Ion",
+                    "ionp",
+                    "ion@example.com",
+                    generate_password_hash("parola123"),
+                    25,
+                    "M",
+                    1,
+                    1,
+                    "emoji",
+                    "🐼",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO evenimente
+                (titlu, descriere, tip, locatie, data_ora, durata_minute, data_limita_inscriere,
+                 varsta_min, varsta_max, id_organizator, nr_maxim_participanti, imagine_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "Meci de Fotbal 5 la 5",
+                    "Căutăm jucători pentru un meci amical de fotbal. Nivel mediu.",
+                    "Sport",
+                    "Teren Synthetic Arena",
+                    "2026-06-15T18:00",
+                    90,
+                    "2026-06-14T12:00",
+                    18,
+                    45,
+                    1,
+                    10,
+                    "https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO evenimente
+                (titlu, descriere, tip, locatie, data_ora, durata_minute, data_limita_inscriere,
+                 varsta_min, varsta_max, id_organizator, nr_maxim_participanti, imagine_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "Seară de Board Games",
+                    "Catan, Ticket to Ride și multe altele. Veniți cu voie bună!",
+                    "Social",
+                    "Ludic Cafe",
+                    "2026-06-20T19:00",
+                    180,
+                    "2026-06-19T20:00",
+                    16,
+                    99,
+                    1,
+                    8,
+                    "https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
+                ),
+            )
+            conn.execute("INSERT INTO inscrieri (id_utilizator, id_eveniment) VALUES (1, 1)")
+            conn.execute(
+                """
+                INSERT INTO intrebari (id_eveniment, id_utilizator, continut, raspuns_organizator)
+                VALUES (1, 1, 'Se joacă dacă plouă?', 'Da, terenul este acoperit.')
+                """
+            )
+
+
+def event_query(extra_where="", params=(), sortare="data_ora"):
+    allowed_sort = {
+        "data_ora": "e.data_ora",
+        "tip": "e.tip",
+        "locatie": "e.locatie",
+    }
+    order_by = allowed_sort.get(sortare, "e.data_ora")
+    sql = f"""
+        SELECT e.*, u.username AS organizator_username,
+               COUNT(i.id_inscriere) AS locuri_ocupate
+        FROM evenimente e
+        JOIN utilizatori u ON u.id_utilizator = e.id_organizator
+        LEFT JOIN inscrieri i ON i.id_eveniment = e.id_eveniment
+        WHERE 1 = 1 {extra_where}
+        GROUP BY e.id_eveniment
+        ORDER BY {order_by} ASC
+    """
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    events = [row_to_dict(row) for row in rows]
+    for event in events:
+        max_participants = event.get("nr_maxim_participanti")
+        event["este_plin"] = max_participants is not None and event["locuri_ocupate"] >= max_participants
+    return events
+
+
+def send_reset_email(to_email, new_password):
+    host = os.environ.get("SMTP_HOST")
+    if not host:
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = "HobbyPall - parolă nouă"
+    message["From"] = os.environ.get("SMTP_FROM", "noreply@hobbypall.local")
+    message["To"] = to_email
+    message.set_content(f"Noua ta parolă HobbyPall este: {new_password}")
+
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    username = os.environ.get("SMTP_USER")
+    password = os.environ.get("SMTP_PASSWORD")
+    use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+    with smtplib.SMTP(host, port) as server:
+        if use_tls:
+            server.starttls()
+        if username and password:
+            server.login(username, password)
+        server.send_message(message)
+    return True
+
+
+@app.route("/")
 def index():
-    evenimente = []
-    titru_sectiune = "🌐 Toate Evenimentele Disponibile"
-    
-    user_id = session.get('user_id')
-    filtru = request.args.get('filtru') 
-    sortare = request.args.get('sortare', 'data_ora') 
+    user = current_user()
+    user_id = user["id_utilizator"] if user else None
+    filtru = request.args.get("filtru")
+    sortare = request.args.get("sortare", "data_ora")
+    cautare = (request.args.get("q") or "").strip()
+    titru_sectiune = "Evenimente"
 
-    if sortare not in ['data_ora', 'tip', 'locatie']:
-        sortare = 'data_ora'
+    where = ""
+    params = []
+    if filtru == "create" and user_id:
+        where += " AND e.id_organizator = ?"
+        params.append(user_id)
+        titru_sectiune = "Organizate de mine"
+    elif filtru == "particip" and user_id:
+        where += " AND e.id_eveniment IN (SELECT id_eveniment FROM inscrieri WHERE id_utilizator = ?)"
+        params.append(user_id)
+        titru_sectiune = "Particip"
 
-    try:
-        # 1. Preluăm evenimentele în funcție de filtru
-        if user_id and filtru == 'create':
-            response = supabase.table('evenimente').select("*").eq('id_organizator', user_id).order('id_eveniment', desc=True).execute()
-            evenimente = response.data
-            titru_sectiune = "👑 Evenimentele Organizate de Mine"
-            
-        elif user_id and filtru == 'particip':
-            response_inscrieri = supabase.table('inscrieri').select('evenimente(*)').eq('id_utilizator', user_id).execute()
-            if response_inscrieri.data:
-                evenimente = [ins['evenimente'] for ins in response_inscrieri.data if ins.get('evenimente')]
-                evenimente = sorted(evenimente, key=lambda x: x.get(sortare) if x.get(sortare) is not None else "")
-            titru_sectiune = "📋 Evenimentele la care participi"
-            
-        else:
-            response = supabase.table('evenimente').select("*").order(sortare).execute()
-            evenimente = response.data
-            titru_sectiune = "🌐 Toate Evenimentele Disponibile"
+    if cautare:
+        like = f"%{cautare}%"
+        where += " AND (e.titlu LIKE ? OR e.descriere LIKE ? OR e.tip LIKE ? OR e.locatie LIKE ?)"
+        params.extend([like, like, like, like])
+        titru_sectiune = f'Rezultate pentru "{cautare}"'
 
-        # 2. Calculăm dinamic locurile ocupate pentru fiecare eveniment afișat
-        for ev in evenimente:
-            id_ev = ev['id_eveniment']
-            res_nr = supabase.table('inscrieri').select('id_utilizator', count='exact').eq('id_eveniment', id_ev).execute()
-            
-            nr_actual = res_nr.count if res_nr.count is not None else 0
-            limita = ev.get('nr_maxim_participanti')
-
-            ev['locuri_ocupate'] = nr_actual
-            
-            if limita and nr_actual >= limita:
-                ev['este_plin'] = True
-            else:
-                ev['este_plin'] = False
-
-    except Exception as e:
-        print(f"Eroare la citirea datelor: {e}")
-        evenimente = []
-        
-    return render_template('index.html', evenimente=evenimente, titru_sectiune=titru_sectiune, sortare_curenta=sortare)
-
-@app.route('/evenimente/mine')
-def evenimente_mine():
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a vedea evenimentele tale.", "error")
-        return redirect(url_for('login'))
-    return redirect(url_for('index', filtru='create'))
-
-# ==========================================
-# 2. PAGINA ȘI LOGICA DE ÎNREGISTRARE
-# ==========================================
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        nume = request.form.get('nume')
-        prenume = request.form.get('prenume')
-        username = request.form.get('username')
-        email = request.form.get('email')
-        parola = request.form.get('parola') 
-        varsta = int(request.form.get('varsta'))
-        sex = request.form.get('sex')
-
-        try:
-            parola_hash = generate_password_hash(parola)
-            date_utilizator = {
-                "nume": nume,
-                "prenume": prenume,
-                "username": username,
-                "email": email,
-                "parola": parola_hash,
-                "varsta": varsta,
-                "sex": sex,
-                "confirmat": True,
-                "admin": False
-            }
-            
-            supabase.table('utilizatori').insert(date_utilizator).execute()
-            flash("Contul a fost creat cu succes! Te poți autentifica.", "success")
-            return redirect(url_for('login'))
-            
-        except Exception as e:
-            flash(f"Eroare la înregistrare: {e}", "error")
-            return render_template('register.html')
-
-    return render_template('register.html')
-
-# ==========================================
-# 3. PAGINA ȘI LOGICA DE AUTENTIFICARE
-# ==========================================
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        identificator = request.form.get('email') 
-        parola = request.form.get('parola')
-
-        try:
-            response = supabase.table('utilizatori')\
-                .select('*')\
-                .or_(f"email.eq.{identificator},username.eq.{identificator}")\
-                .execute()
-            
-            utilizatori_gasiti = response.data
-
-            if utilizatori_gasiti:
-                user = utilizatori_gasiti[0]
-                parola_stocata = user['parola']
-                valid_login = False
-
-                if check_password_hash(parola_stocata, parola):
-                    valid_login = True
-                elif parola_stocata == parola:
-                    # Fallback pentru parole existente salvate necriptat.
-                    valid_login = True
-                    nou_hash = generate_password_hash(parola)
-                    supabase.table('utilizatori').update({'parola': nou_hash}).eq('id_utilizator', user['id_utilizator']).execute()
-
-                if valid_login:
-                    session['user_id'] = user['id_utilizator']
-                    session['username'] = user['username']
-                    session['este_admin'] = user.get('admin', False)
-                    flash(f"Bine ai revenit, {user['prenume']}!", "success")
-                    return redirect(url_for('index'))
-                else:
-                    flash("Date de autentificare incorecte!", "error")
-                
-        except Exception as e:
-            flash(f"Eroare la autentificare: {e}", "error")
-
-    return render_template('login.html')
-
-# ==========================================
-# 4. PAGINA DE CREARE EVENIMENT (HOST) - Modificată pentru Upload Poze
-# ==========================================
-@app.route('/eveniment/nou', methods=['GET', 'POST'])
-def creeaza_eveniment():
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a organiza un eveniment!", "error")
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        try:
-            imagine_url = None
-            
-            # Preluăm fișierul imaginii trimis din formularul HTML
-            fisier_imagine = request.files.get('imagine')
-            
-            if fisier_imagine and fisier_imagine.filename != '':
-                # Generăm un nume unic pentru fișier ca să evităm suprascrierea dacă doi utilizatori pun o poză cu același nume
-                extensie = os.path.splitext(fisier_imagine.filename)[1]
-                nume_unic_fisier = f"eveniment_{random.randint(100000, 999999)}{extensie}"
-                
-                # Citim conținutul binar al imaginii
-                date_fisier = fisier_imagine.read()
-                
-                # 1. Urcăm fișierul fizic în Supabase Storage Bucket
-                supabase.storage.from_('imagini-evenimente').upload(
-                    path=nume_unic_fisier,
-                    file=date_fisier,
-                    file_options={"content-type": fisier_imagine.content_type}
-                )
-                
-                # 2. Extragem URL-ul public generat automat de Bucket
-                res_url = supabase.storage.from_('imagini-evenimente').get_public_url(nume_unic_fisier)
-                imagine_url = res_url
-
-            # 3. Construim dicționarul complet pentru tabela din baza de date
-            date_eveniment = {
-                "titlu": request.form.get('titlu'),
-                "descriere": request.form.get('descriere'),
-                "tip": request.form.get('tip'),
-                "locatie": request.form.get('locatie'),
-                "data_ora": request.form.get('data_ora'),
-                "durata_minute": int(request.form.get('durata_minute')),
-                "data_limita_inscriere": request.form.get('data_limita_inscriere'),
-                "varsta_min": int(request.form.get('varsta_min')) if request.form.get('varsta_min') else None,
-                "varsta_max": int(request.form.get('varsta_max')) if request.form.get('varsta_max') else None,
-                "id_organizator": session.get('user_id'), 
-                "nr_maxim_participanti": int(request.form.get('nr_maxim_participanti')) if request.form.get('nr_maxim_participanti') else None,
-                "imagine_url": imagine_url  # Salvăm link-ul text în baza de date
-            }
-            
-            supabase.table('evenimente').insert(date_eveniment).execute()
-            flash("Evenimentul a fost creat cu succes!", "success")
-            return redirect(url_for('index'))
-            
-        except Exception as e:
-            print(f"Eroare detaliată la crearea evenimentului: {e}")
-            flash(f"Eroare la crearea evenimentului: {e}", "error")
-
-    return render_template('creeaza_eveniment.html')
-
-# ==========================================
-# 4.1 PAGINA DE EDITARE EVENIMENT (HOST)
-# ==========================================
-@app.route('/eveniment/<int:id_eveniment>/editeaza', methods=['GET', 'POST'])
-def editeaza_eveniment(id_eveniment):
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a edita un eveniment!", "error")
-        return redirect(url_for('login'))
-
-    try:
-        res_ev = supabase.table('evenimente').select('*').eq('id_eveniment', id_eveniment).execute()
-        if not res_ev.data:
-            flash("Evenimentul nu a fost găsit!", "error")
-            return redirect(url_for('index'))
-        
-        eveniment = res_ev.data[0]
-        
-        if eveniment['id_organizator'] != session.get('user_id'):
-            flash("Nu poți edita un eveniment pe care nu l-ai creat!", "error")
-            return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
-
-        if request.method == 'POST':
-            imagine_url = eveniment.get('imagine_url')
-            
-            fisier_imagine = request.files.get('imagine')
-            
-            if fisier_imagine and fisier_imagine.filename != '':
-                extensie = os.path.splitext(fisier_imagine.filename)[1]
-                nume_unic_fisier = f"eveniment_{random.randint(100000, 999999)}{extensie}"
-                
-                date_fisier = fisier_imagine.read()
-                
-                supabase.storage.from_('imagini-evenimente').upload(
-                    path=nume_unic_fisier,
-                    file=date_fisier,
-                    file_options={"content-type": fisier_imagine.content_type}
-                )
-                
-                res_url = supabase.storage.from_('imagini-evenimente').get_public_url(nume_unic_fisier)
-                imagine_url = res_url
-
-            date_actualizate = {
-                "titlu": request.form.get('titlu'),
-                "descriere": request.form.get('descriere'),
-                "tip": request.form.get('tip'),
-                "locatie": request.form.get('locatie'),
-                "data_ora": request.form.get('data_ora'),
-                "durata_minute": int(request.form.get('durata_minute')),
-                "data_limita_inscriere": request.form.get('data_limita_inscriere'),
-                "varsta_min": int(request.form.get('varsta_min')) if request.form.get('varsta_min') else None,
-                "varsta_max": int(request.form.get('varsta_max')) if request.form.get('varsta_max') else None,
-                "nr_maxim_participanti": int(request.form.get('nr_maxim_participanti')) if request.form.get('nr_maxim_participanti') else None,
-                "imagine_url": imagine_url
-            }
-            
-            supabase.table('evenimente').update(date_actualizate).eq('id_eveniment', id_eveniment).execute()
-            flash("Evenimentul a fost actualizat cu succes!", "success")
-            return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
-            
-    except Exception as e:
-        print(f"Eroare detaliată la editarea evenimentului: {e}")
-        flash(f"Eroare la editarea evenimentului: {e}", "error")
-
-    return render_template('editeaza_eveniment.html', eveniment=eveniment)
-
-# ==========================================
-# 5. LOGICA DE DECONECTARE (LOGOUT)
-# ==========================================
-@app.route('/logout')
-def logout():
-    session.clear() 
-    flash("Te-ai deconectat cu succes.", "info")
-    return redirect(url_for('index'))
-
-# ==========================================
-# 6. PAGINA DE DETALII EVENIMENT - Întrebări, Răspunsuri și Participanți
-# ==========================================
-@app.route('/eveniment/<int:id_eveniment>', methods=['GET', 'POST'])
-def detalii_eveniment(id_eveniment):
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a vedea detaliile!", "error")
-        return redirect(url_for('login'))
-
-    user_id = session.get('user_id')
-
-    if request.method == 'POST':
-        continut = request.form.get('continut')
-        if continut:
-            try:
-                date_intrebare = {
-                    "id_eveniment": id_eveniment,
-                    "id_utilizator": user_id,
-                    "continut": continut
-                }
-                supabase.table('intrebari_evenimente').insert(date_intrebare).execute()
-                flash("Mesajul tău a fost trimis cu succes!", "success")
-            except Exception as e:
-                flash(f"Eroare la trimiterea mesajului: {e}", "error")
-        return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
-
-    try:
-        res_ev = supabase.table('evenimente').select('*').eq('id_eveniment', id_eveniment).execute()
-        if not res_ev.data:
-            flash("Evenimentul nu a fost găsit!", "error")
-            return redirect(url_for('index'))
-        
-        eveniment = res_ev.data[0]
-
-        res_intr = supabase.table('intrebari_evenimente')\
-            .select('*, utilizatori(username, nume, prenume)')\
-            .eq('id_eveniment', id_eveniment)\
-            .order('id_intrebare', desc=False)\
-            .execute()
-        intrebari = res_intr.data
-
-        este_organizator = (eveniment['id_organizator'] == user_id)
-        
-        # Filtru întrebări: organizatorul vede toate, iar ceilalți doar ale lor
-        if not este_organizator and user_id:
-            intrebari = [intr for intr in intrebari if intr.get('id_utilizator') == user_id]
-        participanti = []
-
-        if este_organizator:
-            res_part = supabase.table('inscrieri')\
-                .select('utilizatori(nume, prenume, email, varsta)')\
-                .eq('id_eveniment', id_eveniment)\
-                .execute()
-            
-            if res_part.data:
-                participanti = [p['utilizatori'] for p in res_part.data if p.get('utilizatori')]
-
-    except Exception as e:
-        flash(f"Eroare la încărcarea paginii: {e}", "error")
-        return redirect(url_for('index'))
-
+    evenimente = event_query(where, params, sortare)
     return render_template(
-        'detalii_eveniment.html', 
-        eveniment=eveniment, 
-        intrebari=intrebari, 
-        este_organizator=este_organizator, 
-        participanti=participanti
+        "index.html",
+        evenimente=evenimente,
+        titru_sectiune=titru_sectiune,
+        sortare_curenta=sortare,
+        cautare=cautare,
     )
 
-# ==========================================
-# 6.1 PROCESAREA RĂSPUNSULUI OFICIAL (ORGANIZATOR)
-# ==========================================
-@app.route('/intrebare/raspunde/<int:id_intrebare>', methods=['POST'])
-def raspunde_intrebare(id_intrebare):
-    user_id = session.get('user_id')
-    raspuns = request.form.get('raspuns_organizator')
-    id_eveniment = request.form.get('id_eveniment')
 
-    if not user_id or not raspuns:
-        flash("Acțiune neautorizată sau text lipsă!", "error")
-        return redirect(url_for('index'))
+@app.route("/evenimente/mine")
+def evenimente_mine():
+    if not current_user():
+        flash("Trebuie să fii autentificat.", "error")
+        return redirect(url_for("login"))
+    return redirect(url_for("index", filtru="create"))
 
-    try:
-        supabase.table('intrebari_evenimente')\
-            .update({"raspuns_organizator": raspuns})\
-            .eq('id_intrebare', id_intrebare)\
-            .execute()
-        flash("Răspunsul tău oficial a fost adăugat!", "success")
-    except Exception as e:
-        flash(f"Eroare la salvarea răspunsului: {e}", "error")
 
-    return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO utilizatori
+                    (nume, prenume, username, email, parola, varsta, sex, admin, confirmat, avatar_type, avatar_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'emoji', ?)
+                    """,
+                    (
+                        request.form.get("nume", "").strip(),
+                        request.form.get("prenume", "").strip(),
+                        request.form.get("username", "").strip(),
+                        request.form.get("email", "").strip().lower(),
+                        generate_password_hash(request.form.get("parola", "")),
+                        int(request.form.get("varsta") or 0),
+                        request.form.get("sex", ""),
+                        "🐼",
+                    ),
+                )
+            flash("Cont creat și confirmat. Te poți autentifica.", "success")
+            return redirect(url_for("login"))
+        except sqlite3.IntegrityError:
+            flash("Emailul sau username-ul există deja.", "error")
+        except ValueError:
+            flash("Vârsta trebuie să fie un număr valid.", "error")
+    return render_template("register.html")
 
-# ==========================================
-# 7. LOGICA SIMPLĂ DE ÎNSCRIERE LA EVENIMENT (PARTICIPĂ)
-# ==========================================
-@app.route('/participa/<int:id_eveniment>')
-def participa(id_eveniment):
-    user_id = session.get('user_id')
-    
-    if not user_id:
-        flash("Trebuie să fii autentificat pentru a participa la un eveniment!", "error")
-        return redirect(url_for('login'))
 
-    try:
-        verificare = supabase.table('inscrieri')\
-            .select('*')\
-            .eq('id_utilizator', user_id)\
-            .eq('id_eveniment', id_eveniment)\
-            .execute()
-            
-        if verificare.data:
-            flash("Ești deja înscris la acest eveniment!", "info")
-            return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        identificator = request.form.get("email", "").strip().lower()
+        parola = request.form.get("parola", "")
+        with get_db() as conn:
+            user = conn.execute(
+                "SELECT * FROM utilizatori WHERE lower(email) = ? OR lower(username) = ?",
+                (identificator, identificator),
+            ).fetchone()
 
-        date_inscriere = {
-            "id_utilizator": user_id,
-            "id_eveniment": id_eveniment
-        }
-        
-        supabase.table('inscrieri').insert(date_inscriere).execute()
-        flash("Te-ai înscris cu succes la eveniment!", "success")
-        
-    except Exception as e:
-        flash(f"Eroare la înscriere: {e}", "error")
-        return redirect(url_for('index'))
-        
-    return redirect(url_for('detalii_eveniment', id_eveniment=id_eveniment))
+        if not user or not check_password_hash(user["parola"], parola):
+            flash("Email/username sau parolă incorectă.", "error")
+        elif not user["confirmat"]:
+            flash("Contul nu este confirmat.", "error")
+        else:
+            user_dict = row_to_dict(user)
+            session["user_id"] = user["id_utilizator"]
+            session["username"] = user["username"]
+            session["este_admin"] = bool(user["admin"])
+            sync_avatar_session(user_dict)
+            flash(f"Salut, {user['nume']} {user['prenume']}!", "success")
+            return redirect(url_for("index"))
+    return render_template("login.html")
 
-# ==========================================
-# 7.1 PAGINA DE PROFIL UTILIZATOR ȘI STATISTICI
-# ==========================================
-@app.route('/profil')
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Deconectat.", "info")
+    return redirect(url_for("index"))
+
+
+@app.route("/profil")
 def profil():
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a-ți vedea profilul!", "error")
-        return redirect(url_for('login'))
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        nr_create = conn.execute(
+            "SELECT COUNT(*) FROM evenimente WHERE id_organizator = ?", (user["id_utilizator"],)
+        ).fetchone()[0]
+        nr_participari = conn.execute(
+            "SELECT COUNT(*) FROM inscrieri WHERE id_utilizator = ?", (user["id_utilizator"],)
+        ).fetchone()[0]
+    return render_template("profil.html", user=user, nr_create=nr_create, nr_participari=nr_participari)
 
-    user_id = session.get('user_id')
 
+@app.route("/profil/update-avatar", methods=["POST"])
+def update_avatar():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+
+    avatar_type = user["avatar_type"]
+    avatar_url = user["avatar_url"]
+    selected_emoji = request.form.get("emoji")
+    if selected_emoji:
+        avatar_type = "emoji"
+        avatar_url = selected_emoji
+        flash("Avatar actualizat.", "success")
+    elif "avatar_file" in request.files:
+        file = request.files["avatar_file"]
+        if file and file.filename:
+            filename = secure_filename(f"user_{user['id_utilizator']}_{file.filename}")
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            file.save(filepath)
+            avatar_type = "image"
+            avatar_url = url_for("static", filename=f"uploads/avatars/{filename}")
+            flash("Poza de profil a fost actualizată.", "success")
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE utilizatori SET avatar_type = ?, avatar_url = ? WHERE id_utilizator = ?",
+            (avatar_type, avatar_url, user["id_utilizator"]),
+        )
+    user["avatar_type"] = avatar_type
+    user["avatar_url"] = avatar_url
+    sync_avatar_session(user)
+    return redirect(url_for("profil"))
+
+
+@app.route("/profil/update-details", methods=["POST"])
+def update_details():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
     try:
-        res_user = supabase.table('utilizatori').select('*').eq('id_utilizator', user_id).execute()
-        if not res_user.data:
-            flash("Utilizatorul nu a fost găsit!", "error")
-            return redirect(url_for('index'))
-        
-        date_profil = res_user.data[0]
+        with get_db() as conn:
+            conn.execute(
+                """
+                UPDATE utilizatori
+                SET nume = ?, prenume = ?, email = ?, varsta = ?, sex = ?
+                WHERE id_utilizator = ?
+                """,
+                (
+                    request.form.get("nume", "").strip(),
+                    request.form.get("prenume", "").strip(),
+                    request.form.get("email", "").strip().lower(),
+                    int(request.form.get("varsta") or 0),
+                    request.form.get("sex", ""),
+                    user["id_utilizator"],
+                ),
+            )
+        flash("Informații salvate.", "success")
+    except sqlite3.IntegrityError:
+        flash("Emailul este deja folosit de alt cont.", "error")
+    except ValueError:
+        flash("Vârsta trebuie să fie validă.", "error")
+    return redirect(url_for("profil"))
 
-        res_create = supabase.table('evenimente').select('id_eveniment', count='exact').eq('id_organizator', user_id).execute()
-        nr_create = res_create.count if res_create.count is not None else len(res_create.data)
 
-        res_participari = supabase.table('inscrieri').select('id_inscriere', count='exact').eq('id_utilizator', user_id).execute()
-        nr_participari = res_participari.count if res_participari.count is not None else len(res_participari.data)
-
-    except Exception as e:
-        print(f"Eroare la încărcarea profilului: {e}")
-        flash("A apărut o eroare la încărcarea profilului.", "error")
-        return redirect(url_for('index'))
-
-    return render_template('profil.html', user=date_profil, nr_create=nr_create, nr_participari=nr_participari)
-
-# ==========================================
-# 7.2 LOGICA DE SCHIMBARE A PAROLEI
-# ==========================================
-@app.route('/profil/schimba-parola', methods=['GET', 'POST'])
+@app.route("/profil/schimba-parola", methods=["GET", "POST"])
 def schimba_parola():
-    if not session.get('user_id'):
-        flash("Trebuie să fii autentificat pentru a schimba parola!", "error")
-        return redirect(url_for('login'))
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        parola_actuala = request.form.get("parola_actuala", "")
+        parola_noua = request.form.get("parola_noua", "")
+        confirmare = request.form.get("parola_noua_confirmare", "")
+        if not check_password_hash(user["parola"], parola_actuala):
+            flash("Parola actuală nu este corectă.", "error")
+        elif len(parola_noua) < 6:
+            flash("Parola nouă trebuie să aibă minim 6 caractere.", "error")
+        elif parola_noua != confirmare:
+            flash("Parolele noi nu coincid.", "error")
+        else:
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE utilizatori SET parola = ? WHERE id_utilizator = ?",
+                    (generate_password_hash(parola_noua), user["id_utilizator"]),
+                )
+            flash("Parola a fost schimbată.", "success")
+            return redirect(url_for("profil"))
+    return render_template("schimba_parola.html")
 
-    if request.method == 'POST':
-        parola_actuala = request.form.get('parola_actuala')
-        parola_noua = request.form.get('parola_noua')
-        parola_noua_confirmare = request.form.get('parola_noua_confirmare')
-        user_id = session.get('user_id')
 
-        if parola_noua != parola_noua_confirmare:
-            flash("Parola nouă și confirmarea nu coincid!", "error")
-            return render_template('schimba_parola.html')
-
-        try:
-            res_user = supabase.table('utilizatori').select('parola').eq('id_utilizator', user_id).execute()
-            
-            if res_user.data and res_user.data[0]['parola'] == parola_actuala:
-                supabase.table('utilizatori')\
-                    .update({"parola": parola_noua})\
-                    .eq('id_utilizator', user_id)\
-                    .execute()
-                
-                flash("Parola a fost modificată cu succes!", "success")
-                return redirect(url_for('profil'))
-            else:
-                flash("Parola actuală introdusă este incorectă!", "error")
-                
-        except Exception as e:
-            print(f"Eroare la schimbarea parolei: {e}")
-            flash("A apărut o eroare neașteptată. Încearcă din nou.", "error")
-
-    return render_template('schimba_parola.html')
-
-# ==========================================
-# 8. FUNCȚIE AJUTĂTOARE PENTRU TRIMITERE E-MAIL
-# ==========================================
-def trimite_email_recuperare(email_destinatar, parola_noua):
-    email_expediator = os.environ.get("EMAIL_EXPEDIATOR")
-    parola_aplicatie = os.environ.get("EMAIL_PAROLA_APLICATIE")
-
-    if not email_expediator or not parola_aplicatie:
-        print("⚠️ Configurația pentru trimiterea e-mailului lipsește din .env!")
-        return False
-
-    mesaj = MIMEMultipart()
-    mesaj['From'] = email_expediator
-    mesaj['To'] = email_destinatar
-    mesaj['Subject'] = "🔒 Resetare Parolă HobbyPall"
-
-    corp_email = f"""
-    Salutare,
-    
-    Am primit o cerere de resetare a parolei pentru contul tău de pe HobbyPall.
-    Noua ta parolă temporară este: {parola_noua}
-    Te rugăm să te autentifici folosind această parolă și să o schimbi imediat din secțiunea 'Profilul Meu' pentru siguranța contului tău.
-
-    O zi excelentă,
-    Echipa HobbyPall 🎯
-    """
-    mesaj.attach(MIMEText(corp_email, 'plain', 'utf-8'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(email_expediator, parola_aplicatie)
-        server.sendmail(email_expediator, email_destinatar, mesaj.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"Eroare SMTP la trimiterea e-mailului: {e}")
-        return False
-
-# ==========================================
-# 8.1 RUTA PENTRU SOLICITARE RECUPERARE PAROLĂ
-# ==========================================
-@app.route('/recuperare-parola', methods=['GET', 'POST'])
+@app.route("/recuperare-parola", methods=["GET", "POST"])
 def recuperare_parola():
-    if request.method == 'POST':
-        email = request.form.get('email')
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM utilizatori WHERE lower(email) = ?", (email,)).fetchone()
+            if not user:
+                flash("Nu există un cont cu acest email.", "error")
+                return render_template("recuperare_parola.html")
+
+            new_password = "".join(random.choices(string.ascii_letters + string.digits, k=10))
+            conn.execute(
+                "UPDATE utilizatori SET parola = ? WHERE id_utilizator = ?",
+                (generate_password_hash(new_password), user["id_utilizator"]),
+            )
 
         try:
-            res_user = supabase.table('utilizatori').select('id_utilizator').eq('email', email).execute()
-            
-            if res_user.data:
-                user_id = res_user.data[0]['id_utilizator']
-                caractere = string.ascii_letters + string.digits
-                parola_aleatorie = ''.join(random.choice(caractere) for _ in range(8))
-                if trimite_email_recuperare(email, parola_aleatorie):
-                    supabase.table('utilizatori')\
-                        .update({"parola": parola_aleatorie})\
-                        .eq('id_utilizator', user_id)\
-                        .execute()
-                    
-                    flash("O parolă nouă a fost trimisă pe adresa ta de e-mail!", "success")
-                    return redirect(url_for('login'))
-                else:
-                    flash("A apărut o eroare la trimiterea e-mailului. Contactează administratorul.", "error")
+            email_sent = send_reset_email(email, new_password)
+            if email_sent:
+                flash("Ți-am trimis pe email noua parolă.", "success")
+                return redirect(url_for("login"))
+            flash("Emailul nu este configurat. Am afișat parola nouă mai jos.", "info")
+            return render_template("recuperare_parola.html", generated_password=new_password)
+        except Exception:
+            flash("SMTP a eșuat. Am afișat parola nouă mai jos.", "error")
+            return render_template("recuperare_parola.html", generated_password=new_password)
+    return render_template("recuperare_parola.html")
+
+
+@app.route("/profil/sterge-cont", methods=["POST"])
+def sterge_cont():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    parola = request.form.get("parola_confirmare", "")
+    if not check_password_hash(user["parola"], parola):
+        flash("Parola nu este corectă. Contul nu a fost șters.", "error")
+        return redirect(url_for("profil"))
+    with get_db() as conn:
+        conn.execute("DELETE FROM utilizatori WHERE id_utilizator = ?", (user["id_utilizator"],))
+    session.clear()
+    flash("Contul și datele asociate au fost șterse.", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/eveniment/nou", methods=["GET", "POST"])
+def creeaza_eveniment():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        imagine_url = None
+        file = request.files.get("imagine")
+        if file and file.filename:
+            filename = secure_filename(f"event_{user['id_utilizator']}_{file.filename}")
+            filepath = os.path.join(app.config["EVENT_UPLOAD_FOLDER"], filename)
+            file.save(filepath)
+            imagine_url = url_for("static", filename=f"uploads/events/{filename}")
+
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO evenimente
+                (titlu, descriere, tip, locatie, data_ora, durata_minute, data_limita_inscriere,
+                 varsta_min, varsta_max, id_organizator, nr_maxim_participanti, imagine_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    request.form.get("titlu", "").strip(),
+                    request.form.get("descriere", "").strip(),
+                    request.form.get("tip", ""),
+                    request.form.get("locatie", "").strip(),
+                    request.form.get("data_ora", ""),
+                    int(request.form.get("durata_minute") or 0),
+                    request.form.get("data_limita_inscriere", ""),
+                    int(request.form["varsta_min"]) if request.form.get("varsta_min") else None,
+                    int(request.form["varsta_max"]) if request.form.get("varsta_max") else None,
+                    user["id_utilizator"],
+                    int(request.form["nr_maxim_participanti"]) if request.form.get("nr_maxim_participanti") else None,
+                    imagine_url,
+                ),
+            )
+        flash("Eveniment creat.", "success")
+        return redirect(url_for("index"))
+    return render_template("creeaza_eveniment.html", event_types=EVENT_TYPES)
+
+
+@app.route("/eveniment/<int:id_eveniment>", methods=["GET", "POST"])
+def detalii_eveniment(id_eveniment):
+    user = current_user()
+    with get_db() as conn:
+        event = conn.execute(
+            """
+            SELECT e.*, u.username AS organizator_username, u.nume AS organizator_nume,
+                   u.prenume AS organizator_prenume,
+                   (SELECT COUNT(*) FROM inscrieri WHERE id_eveniment = e.id_eveniment) AS locuri_ocupate
+            FROM evenimente e
+            JOIN utilizatori u ON u.id_utilizator = e.id_organizator
+            WHERE e.id_eveniment = ?
+            """,
+            (id_eveniment,),
+        ).fetchone()
+        if not event:
+            flash("Evenimentul nu există.", "error")
+            return redirect(url_for("index"))
+
+        event = row_to_dict(event)
+        if request.method == "POST":
+            if not user:
+                return redirect(url_for("login"))
+            if user["id_utilizator"] == event["id_organizator"]:
+                flash("Organizatorul nu poate adăuga întrebări propriului eveniment.", "error")
             else:
-                flash("Dacă adresa de e-mail este înregistrată, vei primi un mesaj în scurt timp.", "info")
-                return redirect(url_for('login'))
+                continut = request.form.get("continut", "").strip()
+                if continut:
+                    conn.execute(
+                        "INSERT INTO intrebari (id_eveniment, id_utilizator, continut) VALUES (?, ?, ?)",
+                        (id_eveniment, user["id_utilizator"], continut),
+                    )
+                    flash("Întrebarea a fost trimisă.", "success")
+            return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
 
-        except Exception as e:
-            print(f"Eroare la recuperarea parolei: {e}")
-            flash("A apărut o eroare neașteptată.", "error")
+        intrebari = conn.execute(
+            """
+            SELECT q.*, u.username, u.nume, u.prenume
+            FROM intrebari q
+            JOIN utilizatori u ON u.id_utilizator = q.id_utilizator
+            WHERE q.id_eveniment = ?
+            ORDER BY q.creat_la DESC
+            """,
+            (id_eveniment,),
+        ).fetchall()
+        participanti = conn.execute(
+            """
+            SELECT u.nume, u.prenume, u.varsta, u.sex, u.email, i.creat_la
+            FROM inscrieri i
+            JOIN utilizatori u ON u.id_utilizator = i.id_utilizator
+            WHERE i.id_eveniment = ?
+            ORDER BY i.creat_la DESC
+            """,
+            (id_eveniment,),
+        ).fetchall()
+        recenzii = conn.execute(
+            """
+            SELECT r.*, u.username, u.nume, u.prenume
+            FROM recenzii r
+            JOIN utilizatori u ON u.id_utilizator = r.id_utilizator
+            WHERE r.id_eveniment = ?
+            ORDER BY r.creat_la DESC
+            """,
+            (id_eveniment,),
+        ).fetchall()
+        este_inscris = False
+        are_recenzie = False
+        if user:
+            este_inscris = (
+                conn.execute(
+                    "SELECT 1 FROM inscrieri WHERE id_eveniment = ? AND id_utilizator = ?",
+                    (id_eveniment, user["id_utilizator"]),
+                ).fetchone()
+                is not None
+            )
+            are_recenzie = (
+                conn.execute(
+                    "SELECT 1 FROM recenzii WHERE id_eveniment = ? AND id_utilizator = ?",
+                    (id_eveniment, user["id_utilizator"]),
+                ).fetchone()
+                is not None
+            )
 
-    return render_template('recuperare_parola.html')
+    event["este_plin"] = (
+        event["nr_maxim_participanti"] is not None
+        and event["locuri_ocupate"] >= event["nr_maxim_participanti"]
+    )
+    este_organizator = bool(user and event["id_organizator"] == user["id_utilizator"])
+    return render_template(
+        "detalii_eveniment.html",
+        eveniment=event,
+        intrebari=[row_to_dict(row) for row in intrebari],
+        participanti=[row_to_dict(row) for row in participanti],
+        recenzii=[row_to_dict(row) for row in recenzii],
+        este_organizator=este_organizator,
+        este_inscris=este_inscris,
+        are_recenzie=are_recenzie,
+    )
 
-if __name__ == '__main__':
-    if not os.environ.get("WERKZEUG_RUN_MAIN"):
-        webbrowser.open("http://127.0.0.1:5000/")
-    
-    app.run(debug=True, port=5000)
+
+@app.route("/eveniment/<int:id_eveniment>/editeaza", methods=["GET", "POST"])
+def editeaza_eveniment(id_eveniment):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        event = conn.execute("SELECT * FROM evenimente WHERE id_eveniment = ?", (id_eveniment,)).fetchone()
+        if not event:
+            flash("Evenimentul nu există.", "error")
+            return redirect(url_for("index"))
+        if event["id_organizator"] != user["id_utilizator"]:
+            flash("Doar organizatorul poate edita evenimentul.", "error")
+            return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+
+        if request.method == "POST":
+            imagine_url = event["imagine_url"]
+            file = request.files.get("imagine")
+            if file and file.filename:
+                filename = secure_filename(f"event_{id_eveniment}_{file.filename}")
+                filepath = os.path.join(app.config["EVENT_UPLOAD_FOLDER"], filename)
+                file.save(filepath)
+                imagine_url = url_for("static", filename=f"uploads/events/{filename}")
+
+            conn.execute(
+                """
+                UPDATE evenimente
+                SET titlu = ?, descriere = ?, tip = ?, locatie = ?, data_ora = ?, durata_minute = ?,
+                    data_limita_inscriere = ?, varsta_min = ?, varsta_max = ?,
+                    nr_maxim_participanti = ?, imagine_url = ?
+                WHERE id_eveniment = ?
+                """,
+                (
+                    request.form.get("titlu", "").strip(),
+                    request.form.get("descriere", "").strip(),
+                    request.form.get("tip", ""),
+                    request.form.get("locatie", "").strip(),
+                    request.form.get("data_ora", ""),
+                    int(request.form.get("durata_minute") or 0),
+                    request.form.get("data_limita_inscriere", ""),
+                    int(request.form["varsta_min"]) if request.form.get("varsta_min") else None,
+                    int(request.form["varsta_max"]) if request.form.get("varsta_max") else None,
+                    int(request.form["nr_maxim_participanti"]) if request.form.get("nr_maxim_participanti") else None,
+                    imagine_url,
+                    id_eveniment,
+                ),
+            )
+            flash("Eveniment actualizat.", "success")
+            return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+    return render_template("editeaza_eveniment.html", eveniment=row_to_dict(event), event_types=EVENT_TYPES)
+
+
+@app.route("/eveniment/<int:id_eveniment>/sterge", methods=["POST"])
+def sterge_eveniment(id_eveniment):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        event = conn.execute("SELECT * FROM evenimente WHERE id_eveniment = ?", (id_eveniment,)).fetchone()
+        if not event:
+            flash("Evenimentul nu există.", "error")
+            return redirect(url_for("index"))
+        if event["id_organizator"] != user["id_utilizator"]:
+            flash("Doar organizatorul poate șterge evenimentul.", "error")
+            return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+        conn.execute("DELETE FROM evenimente WHERE id_eveniment = ?", (id_eveniment,))
+    flash("Evenimentul a fost șters.", "success")
+    return redirect(url_for("index", filtru="create"))
+
+
+@app.route("/participa/<int:id_eveniment>")
+def participa(id_eveniment):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        event = conn.execute(
+            """
+            SELECT e.*, (SELECT COUNT(*) FROM inscrieri WHERE id_eveniment = e.id_eveniment) AS locuri_ocupate
+            FROM evenimente e WHERE e.id_eveniment = ?
+            """,
+            (id_eveniment,),
+        ).fetchone()
+        if not event:
+            flash("Evenimentul nu există.", "error")
+            return redirect(url_for("index"))
+        if event["id_organizator"] == user["id_utilizator"]:
+            flash("Nu te poți înscrie la propriul eveniment.", "error")
+        elif event["nr_maxim_participanti"] is not None and event["locuri_ocupate"] >= event["nr_maxim_participanti"]:
+            flash("Evenimentul este complet.", "error")
+        elif event["varsta_min"] is not None and user["varsta"] < event["varsta_min"]:
+            flash("Nu îndeplinești vârsta minimă recomandată.", "error")
+        elif event["varsta_max"] is not None and user["varsta"] > event["varsta_max"]:
+            flash("Nu te încadrezi în intervalul de vârstă recomandat.", "error")
+        else:
+            try:
+                conn.execute(
+                    "INSERT INTO inscrieri (id_utilizator, id_eveniment) VALUES (?, ?)",
+                    (user["id_utilizator"], id_eveniment),
+                )
+                flash("Te-ai înscris. Datele tale au fost preluate automat din profil.", "success")
+            except sqlite3.IntegrityError:
+                flash("Ești deja înscris la acest eveniment.", "info")
+    return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+
+
+@app.route("/intrebare/<int:id_intrebare>/raspunde", methods=["POST"])
+def raspunde_intrebare(id_intrebare):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    id_eveniment = int(request.form.get("id_eveniment") or 0)
+    raspuns = request.form.get("raspuns_organizator", "").strip()
+    with get_db() as conn:
+        event = conn.execute("SELECT * FROM evenimente WHERE id_eveniment = ?", (id_eveniment,)).fetchone()
+        if event and event["id_organizator"] == user["id_utilizator"] and raspuns:
+            conn.execute(
+                "UPDATE intrebari SET raspuns_organizator = ? WHERE id_intrebare = ? AND id_eveniment = ?",
+                (raspuns, id_intrebare, id_eveniment),
+            )
+            flash("Răspunsul a fost salvat.", "success")
+        else:
+            flash("Nu poți răspunde la această întrebare.", "error")
+    return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+
+
+@app.route("/eveniment/<int:id_eveniment>/recenzie", methods=["POST"])
+def adauga_recenzie(id_eveniment):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    rating = int(request.form.get("rating") or 0)
+    continut = request.form.get("continut", "").strip()
+    with get_db() as conn:
+        event = conn.execute("SELECT * FROM evenimente WHERE id_eveniment = ?", (id_eveniment,)).fetchone()
+        inscris = conn.execute(
+            "SELECT 1 FROM inscrieri WHERE id_eveniment = ? AND id_utilizator = ?",
+            (id_eveniment, user["id_utilizator"]),
+        ).fetchone()
+        if not event or event["id_organizator"] == user["id_utilizator"] or not inscris:
+            flash("Doar participanții pot lăsa recenzii.", "error")
+        elif not continut or rating < 1 or rating > 5:
+            flash("Recenzia trebuie să conțină text și rating între 1 și 5.", "error")
+        else:
+            try:
+                conn.execute(
+                    "INSERT INTO recenzii (id_eveniment, id_utilizator, rating, continut) VALUES (?, ?, ?, ?)",
+                    (id_eveniment, user["id_utilizator"], rating, continut),
+                )
+                flash("Recenzia a fost publicata.", "success")
+            except sqlite3.IntegrityError:
+                flash("Ai lăsat deja o recenzie pentru acest eveniment.", "info")
+    return redirect(url_for("detalii_eveniment", id_eveniment=id_eveniment))
+
+
+@app.route("/surpriza")
+def surpriza():
+    evenimente = event_query(sortare="data_ora")
+    if not evenimente:
+        flash("Nu există evenimente momentan.", "info")
+        return redirect(url_for("index"))
+    return render_template("surpriza.html", eveniment=random.choice(evenimente))
+
+
+init_db()
+
+if __name__ == "__main__":
+
+    def _open_browser():
+        url = "http://127.0.0.1:5000/"
+        try:
+            webbrowser.open_new(url)
+        except Exception:
+            pass
+
+    threading.Timer(1.0, _open_browser).start()
+    app.run(debug=True, use_reloader=False, port=5000)

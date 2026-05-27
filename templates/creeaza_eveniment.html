@@ -3,13 +3,13 @@
 {% block content %}
 <article style="max-width: 700px; margin: 2rem auto;">
     <header>
-        <h2 style="text-align: center; margin-bottom: 0;">Organizează un Eveniment Nou 📣</h2>
+        <h2 style="text-align: center; margin-bottom: 0;">Organizează un eveniment nou 📣</h2>
         <p style="text-align: center; color: gray;">Adună oameni cu aceleași pasiuni ca ale tale</p>
     </header>
 
     <form action="{{ url_for('creeaza_eveniment') }}" method="POST" enctype="multipart/form-data">
         <label for="titlu">
-            Titlul Evenimentului
+            Titlul evenimentului
             <input type="text" id="titlu" name="titlu" placeholder="ex: Meci amator de baschet 3v3" required>
         </label>
 
@@ -20,10 +20,11 @@
 
         <div class="grid">
             <label for="tip">
-                Tipul Evenimentului
+                Tipul evenimentului
                 <select id="tip" name="tip" required>
-                    <option value="Fizic">Fizic (În persoană)</option>
-                    <option value="Online">Online (Zoom/Discord)</option>
+                    {% for tip in event_types %}
+                        <option value="{{ tip }}">{{ tip }}</option>
+                    {% endfor %}
                 </select>
             </label>
 
@@ -35,7 +36,7 @@
 
         <div class="grid">
             <label for="data_ora">
-                Data și Ora începerii
+                Data și ora începerii
                 <input type="datetime-local" id="data_ora" name="data_ora" required>
             </label>
 
@@ -51,29 +52,29 @@
         </label>
 
         <label for="imagine">
-            Imagine Eveniment (Opțional)
+            Imagine eveniment (opțional)
             <input type="file" id="imagine" name="imagine" accept="image/*">
             <small style="color: #a0aec0;">Recomandat: JPG, PNG sau WebP. Imaginea va fi folosită pe pagina principală și pe pagina de detalii.</small>
         </label>
 
         <label for="nr_maxim_participanti">
-            Număr maxim de participanți (Opțional)
+            Număr maxim de participanți (opțional)
             <input type="number" id="nr_maxim_participanti" name="nr_maxim_participanti" min="1" placeholder="Lasă gol pentru locuri nelimitate">
         </label>
 
         <div class="grid">
             <label for="varsta_min">
-                Vârstă Minimă (Opțional)
+                Vârstă minimă (opțional)
                 <input type="number" id="varsta_min" name="varsta_min" min="0" placeholder="Fără limită">
             </label>
 
             <label for="varsta_max">
-                Vârstă Maximă (Opțional)
+                Vârstă maximă (opțional)
                 <input type="number" id="varsta_max" name="varsta_max" min="0" placeholder="Fără limită">
             </label>
         </div>
 
-        <button type="submit" class="secondary">Publică Evenimentul</button>
+        <button type="submit" class="secondary">Publică evenimentul</button>
     </form>
 </article>
 {% endblock %}
